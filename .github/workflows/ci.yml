@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      # Dummy values — nothing in typecheck/lint/test/build ever calls the
+      # real Anthropic/Wahoo APIs. config.ts's zod schema just needs these
+      # present and correctly shaped (ENCRYPTION_KEY must be exactly 64 chars).
+      ANTHROPIC_API_KEY: ci-placeholder
+      ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm --filter @rumble/web build
+
+      # The BFF's build is `tsc` plus an asset copy: model-config.ts reads
+      # prompts/*.md relative to __dirname, and tsc does not emit .md files, so
+      # without the copy `node dist/index.js` throws on the first prompt read.
+      # Building here is what stops that gap reopening unnoticed.
+      - name: Build BFF
+        run: pnpm --filter @rumble/bff build
+
+      - name: Check the built BFF has its prompt assets
+        run: |
+          set -eu
+          missing=0
+          for f in orchestrator cycling-coach nutritionist recovery sc-coach; do
+            if [ ! -s "apps/bff/dist/modules/claude/prompts/$f.md" ]; then
+              echo "::error::apps/bff/dist/modules/claude/prompts/$f.md is missing or empty"
+              missing=1
+            fi
+          done
+          # Compare counts too, so a prompt added to src without being copied
+          # fails here rather than at runtime on the first consult.
+          src_count=$(find apps/bff/src/modules/claude/prompts -name '*.md' | wc -l | tr -d ' ')
+          dist_count=$(find apps/bff/dist/modules/claude/prompts -name '*.md' | wc -l | tr -d ' ')
+          if [ "$src_count" -ne "$dist_count" ]; then
+            echo "::error::$src_count prompt(s) in src but $dist_count in dist"
+            missing=1
+          fi
+          exit "$missing"

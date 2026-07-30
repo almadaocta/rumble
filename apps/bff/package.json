@@ -1,0 +1,39 @@
+{
+  "name": "@rumble/bff",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && node -e \"require('node:fs').cpSync('src/modules/claude/prompts','dist/modules/claude/prompts',{recursive:true})\"",
+    "start": "node dist/index.js",
+    "db:push": "drizzle-kit push",
+    "db:migrate": "tsx src/scripts/migrate.ts",
+    "db:seed": "tsx src/scripts/seed.ts",
+    "db:reset": "tsx src/scripts/reset.ts",
+    "db:backfill-bests": "tsx src/scripts/backfill-bests.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "@garmin-fit/sdk": "^21.115.0",
+    "better-sqlite3": "^11.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "drizzle-orm": "^0.36.0",
+    "express": "^4.21.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "@types/supertest": "^7.2.1",
+    "drizzle-kit": "^0.28.0",
+    "supertest": "^7.2.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

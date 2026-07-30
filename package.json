@@ -1,0 +1,37 @@
+{
+  "name": "rumble-v2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:web": "pnpm --filter @rumble/web dev",
+    "dev:bff": "pnpm --filter @rumble/bff dev",
+    "dev": "pnpm --filter @rumble/bff dev & pnpm --filter @rumble/web dev",
+    "db:push": "pnpm --filter @rumble/bff db:push",
+    "db:migrate": "pnpm --filter @rumble/bff db:migrate",
+    "db:seed": "pnpm --filter @rumble/bff db:seed",
+    "db:reset": "pnpm --filter @rumble/bff db:reset",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "dotenv": "^16.6.1",
+    "eslint": "^10.8.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.7.0",
+    "jsdom": "^29.1.1",
+    "tsx": "^4.21.0",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10"
+  }
+}

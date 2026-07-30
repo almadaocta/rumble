@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.DS_Store
+
+# desloppify local state
+.desloppify/
+
+# vitest coverage output
+coverage/
