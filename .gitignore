@@ -14,5 +14,11 @@ data/
 # desloppify skill (local only)
 .claude/skills/desloppify/
 
+# desloppify scorecard badge
+scorecard.png
+
+# screenshots (local only — drop 1.png/2.png/3.png to update README)
+docs/screenshots/*.png
+
 # vitest coverage output
 coverage/

@@ -4,21 +4,11 @@
 
 Bring your own [Anthropic API key](https://console.anthropic.com). No server to run beyond your own laptop, no account, no hosted service, no vector database.
 
-<!-- ─────────────────────────────────────────────────────────────
-     DEMO — drop your video and screenshots in here.
-     Video: drag the file straight into a GitHub issue/PR comment,
-     copy the generated URL, and paste it below.
-     Screenshots: save to docs/screenshots/ with these filenames.
-     ───────────────────────────────────────────────────────────── -->
-
 ## Demo
 
-|                                                     |                                                     |
-| :-------------------------------------------------: | :-------------------------------------------------: |
-| ![Dashboard](docs/screenshots/dashboard.png)        | ![Coach chat](docs/screenshots/chat.png)            |
-| **Today** — training load, readiness, next session   | **Coach** — one conversation, specialists behind it |
-| ![Calendar](docs/screenshots/calendar.png)          | ![Nutrition](docs/screenshots/nutrition.png)        |
-| **Calendar** — plan vs. what actually happened       | **Nutrition** — fueling against the day's demand     |
+|                                    |                                    |                                    |
+| :--------------------------------: | :--------------------------------: | :--------------------------------: |
+| ![](docs/screenshots/1.png)        | ![](docs/screenshots/2.png)        | ![](docs/screenshots/3.png)        |
 
 ---
 
@@ -112,11 +102,11 @@ Deleting it removed two modules, a build step, a database table, and a 48-packag
 
 **This stops being true at roughly 3× the current size.** At 40k+ tokens per vertical, cold-cache cost and prefill latency start to matter, and the right answer becomes letting the specialist request sections from a table of contents — not reintroducing embeddings.
 
-### 2. Prompt caching, and the bug that hid in it
+### 2. Prompt caching
 
 The orchestrator's system prompt and all 15 tool schemas are static, so they're marked cache-eligible and sit ahead of the per-turn context. Specialists do the same with persona + library.
 
-Caching is a **prefix match**: one changed byte invalidates everything after it. An early version interpolated a live timestamp into the system prompt, which silently defeated caching for the system prompt *and* every tool schema behind it — no error, no warning, just full price on every call. The fix was ordering: freeze the prefix, and put anything that varies after the last cache breakpoint.
+Caching is a **prefix match**: one changed byte invalidates everything after it. The fix is ordering — freeze the prefix, and put anything that varies after the last cache breakpoint.
 
 The specialist prefixes are sorted deterministically for the same reason — `readdir` order isn't guaranteed, and a library that concatenates differently between restarts would never cache.
 
