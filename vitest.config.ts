@@ -11,6 +11,9 @@ export default defineConfig({
   },
   test: {
     include: ['apps/*/src/**/*.test.{ts,tsx}'],
+    // Run each test file in its own subprocess — prevents open SQLite handles
+    // and other module-level state from one file keeping the process alive.
+    pool: 'forks',
     // Backend tests hit a real (in-memory) SQLite DB and don't need a DOM;
     // frontend component tests do. Most files are backend, so 'node' is the
     // default — component test files opt into jsdom individually via a
