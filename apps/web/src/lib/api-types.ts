@@ -85,7 +85,11 @@ export interface AthleteProfile {
   /** Pre-formatted by the BFF to 2dp, hence a string. */
   wkg: string | null;
   age: number | null;
+  heightCm: number | null;
+  sex: string | null;
+  availableHoursWeek: number | null;
   experienceLevel: string | null;
+  timezone: string | null;
 }
 
 export interface Fitness {
