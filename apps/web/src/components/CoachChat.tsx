@@ -5,8 +5,9 @@ import { useRumbleChatRuntime, loadInitialMessages } from '@/lib/chat-runtime';
 import { AssistantMessage } from '@/components/AssistantMessage';
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { Loader2 } from 'lucide-react';
+import remarkGfm from 'remark-gfm';
 
-const MarkdownText = makeMarkdownText();
+const MarkdownText = makeMarkdownText({ remarkPlugins: [remarkGfm] });
 
 interface CoachChatProps {
   firstName: string;

@@ -115,3 +115,12 @@
   .animate-sheet-up { animation: sheet-up 0.25s ease; }
   .animate-spin { animation: spin 0.8s linear infinite; }
 }
+
+/* Tone down assistant-ui markdown heading sizes — defaults are document-scale
+   (h1 ~2em) which is too large inside a chat bubble. */
+.aui-md-h1 { font-size: 1.05rem;  font-weight: 700; }
+.aui-md-h2 { font-size: 0.975rem; font-weight: 600; }
+.aui-md-h3 { font-size: 0.9rem;   font-weight: 600; }
+.aui-md-h4,
+.aui-md-h5,
+.aui-md-h6 { font-size: 0.875rem; font-weight: 600; }
