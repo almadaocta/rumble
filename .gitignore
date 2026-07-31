@@ -11,5 +11,8 @@ data/
 # desloppify local state
 .desloppify/
 
+# desloppify skill (local only)
+.claude/skills/desloppify/
+
 # vitest coverage output
 coverage/
