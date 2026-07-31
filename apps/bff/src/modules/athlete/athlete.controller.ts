@@ -6,6 +6,7 @@
  * React app's training load and calendar have nothing to do with chat.
  */
 import { Router, type Request, type Response } from 'express';
+import { z } from 'zod';
 import { db } from '../../db/client.js';
 import {
   athletes,
@@ -226,5 +227,69 @@ athleteController.get('/stats', asyncRoute(async (req: Request, res: Response) =
       hours: Number(weekHours.toFixed(1)),
       rides: last7.length,
     },
+  });
+}));
+
+const patchProfileSchema = z.object({
+  name:               z.string().min(1).optional(),
+  weightKg:           z.number().positive().optional(),
+  heightCm:           z.number().int().positive().optional(),
+  age:                z.number().int().min(1).max(120).optional(),
+  ftp:                z.number().int().positive().optional(),
+  sex:                z.string().optional(),
+  availableHoursWeek: z.number().positive().optional(),
+  experienceLevel:    z.string().optional(),
+  timezone:           z.string().min(1).optional(),
+}).strict();
+
+athleteController.patch('/profile', asyncRoute(async (req: Request, res: Response) => {
+  const athleteId = req.athleteId;
+
+  const parsed = patchProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
+  }
+
+  const updates = parsed.data;
+  if (Object.keys(updates).length === 0) {
+    // No-op update: still fetch and return current profile
+  } else {
+    await db.update(athletes).set(updates).where(eq(athletes.id, athleteId));
+  }
+
+  const [athlete] = await db
+    .select({
+      name:               athletes.name,
+      ftp:                athletes.ftp,
+      weightKg:           athletes.weightKg,
+      heightCm:           athletes.heightCm,
+      age:                athletes.age,
+      sex:                athletes.sex,
+      availableHoursWeek: athletes.availableHoursWeek,
+      experienceLevel:    athletes.experienceLevel,
+      timezone:           athletes.timezone,
+    })
+    .from(athletes)
+    .where(eq(athletes.id, athleteId))
+    .limit(1);
+
+  if (!athlete) return res.status(404).json({ error: 'No athlete' });
+
+  const wkg =
+    athlete.ftp && athlete.weightKg
+      ? (athlete.ftp / Number(athlete.weightKg)).toFixed(2)
+      : null;
+
+  res.json({
+    name:               athlete.name,
+    ftp:                athlete.ftp,
+    weightKg:           athlete.weightKg ? Number(athlete.weightKg) : null,
+    heightCm:           athlete.heightCm,
+    age:                athlete.age,
+    sex:                athlete.sex,
+    availableHoursWeek: athlete.availableHoursWeek ? Number(athlete.availableHoursWeek) : null,
+    experienceLevel:    athlete.experienceLevel,
+    timezone:           athlete.timezone,
+    wkg,
   });
 }));

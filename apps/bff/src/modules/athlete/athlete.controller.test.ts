@@ -337,3 +337,89 @@ describe('GET /api/athlete/sessions', () => {
     expect(sessions.map((s: { title: string }) => s.title)).not.toContain('Their session');
   });
 });
+
+describe('PATCH /api/athlete/profile', () => {
+  it('updates name and returns updated profile', async () => {
+    const res = await request(app)
+      .patch('/api/athlete/profile')
+      .send({ name: 'Updated Name' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Updated Name');
+  });
+
+  it('updates numeric fields correctly', async () => {
+    const res = await request(app)
+      .patch('/api/athlete/profile')
+      .send({ ftp: 280, weightKg: 72.5, heightCm: 178, age: 34 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ftp).toBe(280);
+    expect(res.body.weightKg).toBe(72.5);
+    expect(res.body.heightCm).toBe(178);
+    expect(res.body.age).toBe(34);
+  });
+
+  it('recalculates wkg when ftp and weight are both set', async () => {
+    await request(app).patch('/api/athlete/profile').send({ ftp: 200, weightKg: 80 });
+    const res = await request(app).patch('/api/athlete/profile').send({});
+    expect(res.body.wkg).toBe('2.50');
+  });
+
+  it('returns wkg null when weight is missing', async () => {
+    const res = await request(app)
+      .patch('/api/athlete/profile')
+      .send({ ftp: 250 });
+    expect(res.body.wkg).toBeNull();
+  });
+
+  it('rejects empty name with 400', async () => {
+    const res = await request(app)
+      .patch('/api/athlete/profile')
+      .send({ name: '' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects negative ftp with 400', async () => {
+    const res = await request(app)
+      .patch('/api/athlete/profile')
+      .send({ ftp: -10 });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects age out of range with 400', async () => {
+    const res = await request(app)
+      .patch('/api/athlete/profile')
+      .send({ age: 200 });
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts partial update — unmentioned fields unchanged', async () => {
+    await db.update(athletes).set({ ftp: 300 }).where(eq(athletes.id, athleteId));
+    const res = await request(app)
+      .patch('/api/athlete/profile')
+      .send({ name: 'Partial' });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Partial');
+    expect(res.body.ftp).toBe(300);
+  });
+
+  it('404s when athlete row is missing', async () => {
+    await db.delete(athletes).where(eq(athletes.id, athleteId));
+    const res = await request(app)
+      .patch('/api/athlete/profile')
+      .send({ name: 'Ghost' });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns sex, availableHoursWeek, timezone, heightCm in response', async () => {
+    const res = await request(app)
+      .patch('/api/athlete/profile')
+      .send({ sex: 'male', availableHoursWeek: 10, timezone: 'America/New_York', heightCm: 180 });
+    expect(res.status).toBe(200);
+    expect(res.body.sex).toBe('male');
+    expect(res.body.availableHoursWeek).toBe(10);
+    expect(res.body.timezone).toBe('America/New_York');
+    expect(res.body.heightCm).toBe(180);
+  });
+});
