@@ -13,8 +13,6 @@ Bring your own [Anthropic API key](https://console.anthropic.com). No server to 
 
 ## Demo
 
-> 🎥 **[Watch the 2-minute demo](#)** — _replace this link with your uploaded video URL_
-
 |                                                     |                                                     |
 | :-------------------------------------------------: | :-------------------------------------------------: |
 | ![Dashboard](docs/screenshots/dashboard.png)        | ![Coach chat](docs/screenshots/chat.png)            |
