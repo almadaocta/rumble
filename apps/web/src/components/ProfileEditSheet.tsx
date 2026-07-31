@@ -143,8 +143,7 @@ export function ProfileEditSheet({
         {/* Footer */}
         <div className="px-5 py-4 border-t border-border shrink-0">
           <button
-            type="submit"
-            form="profile-edit-form"
+            type="button"
             disabled={saving}
             onClick={handleSubmit}
             className="w-full rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
