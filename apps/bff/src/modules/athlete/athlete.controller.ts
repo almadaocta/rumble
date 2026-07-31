@@ -115,7 +115,10 @@ athleteController.get('/stats', asyncRoute(async (req: Request, res: Response) =
       weightKg: athletes.weightKg,
       heightCm: athletes.heightCm,
       age: athletes.age,
+      sex: athletes.sex,
+      availableHoursWeek: athletes.availableHoursWeek,
       experienceLevel: athletes.experienceLevel,
+      timezone: athletes.timezone,
     })
     .from(athletes)
     .where(eq(athletes.id, athleteId))
@@ -189,7 +192,10 @@ athleteController.get('/stats', asyncRoute(async (req: Request, res: Response) =
       wkg,
       heightCm: athlete.heightCm,
       age: athlete.age,
+      sex: athlete.sex,
+      availableHoursWeek: athlete.availableHoursWeek ? Number(athlete.availableHoursWeek) : null,
       experienceLevel: athlete.experienceLevel,
+      timezone: athlete.timezone,
     },
     fitness: latestMetrics
       ? {
