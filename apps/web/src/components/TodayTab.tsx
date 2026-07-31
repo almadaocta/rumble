@@ -41,7 +41,7 @@ export function TodayTab({ onViewCalendar, onProfileName }: { onViewCalendar: ()
   return (
     <div className="p-5">
       <div className="grid grid-cols-1 gap-2">
-        <AthleteHeroCard profile={stats.profile} maxHr={stats.maxHr} powerBests={stats.powerBests} thisWeek={stats.thisWeek} />
+        <AthleteHeroCard profile={stats.profile} maxHr={stats.maxHr} powerBests={stats.powerBests} thisWeek={stats.thisWeek} onProfileName={onProfileName} />
 
         <div className="flex flex-col sm:flex-row gap-2 items-stretch">
           {/* Left: Training Stress Balance — the single most useful "how am I doing" signal, so it gets the spotlight column */}
