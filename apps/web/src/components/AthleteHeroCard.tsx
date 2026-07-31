@@ -124,15 +124,18 @@ export function AthleteHeroCard({ profile, maxHr, powerBests, thisWeek, onProfil
             </button>
           </div>
 
-          {(profileMetrics.length > 0 || weekMetrics.length > 0) && (
+          {profileMetrics.length > 0 && (
             <div className="flex flex-wrap items-end gap-x-6 gap-y-3 mt-4 pt-4 border-t border-white/15">
               {profileMetrics.map(m => <MetricTile key={m.unit} {...m} />)}
-              {weekMetrics.length > 0 && (
-                <div className="self-stretch flex items-center pl-6 border-l border-white/15">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#f3f3f3]/40">This Week</span>
-                </div>
-              )}
-              {weekMetrics.map(m => <MetricTile key={m.unit} {...m} />)}
+            </div>
+          )}
+
+          {weekMetrics.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-white/15">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#f3f3f3]/40">This Week</span>
+              <div className="flex flex-wrap items-end gap-x-6 gap-y-3 mt-2">
+                {weekMetrics.map(m => <MetricTile key={m.unit} {...m} />)}
+              </div>
             </div>
           )}
 
