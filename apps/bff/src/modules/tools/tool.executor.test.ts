@@ -16,7 +16,19 @@
  * not read as a failure.
  */
 const REIMPORT_TIMEOUT_MS = 30_000;
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { getDb } from '../../db/client.js';
+
+afterAll(() => {
+  // Close the SQLite handle opened by the last dynamic re-import so the
+  // forks-pool subprocess doesn't hang waiting for the connection to drain.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (getDb() as any)._.client.close();
+  } catch {
+    // already closed or never opened — safe to ignore
+  }
+});
 
 const WAHOO_ENV = {
   WAHOO_CLIENT_ID: 'test-client-id',
