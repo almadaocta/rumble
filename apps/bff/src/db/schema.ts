@@ -287,19 +287,3 @@ export const chatMessages = sqliteTable(
   },
   (t) => ({ chatIdx: index('idx_messages_chat').on(t.chatId, t.createdAt) }),
 );
-
-// ── Knowledge base retrieval (§8 of the plan — embeddings stored as JSON,
-// cosine similarity computed in JS; no vector extension needed at this scale) ──
-
-export const kbChunks = sqliteTable(
-  'kb_chunks',
-  {
-    id: uuidPk(),
-    vertical: text('vertical').notNull(), // cycling_coach | nutritionist | strength_conditioning | recovery
-    sourceFile: text('source_file').notNull(),
-    chunkText: text('chunk_text').notNull(),
-    embedding: text('embedding', { mode: 'json' }).notNull().$type<number[]>(),
-    createdAt: timestamptz('created_at').notNull().default(sql`(unixepoch())`),
-  },
-  (t) => ({ verticalIdx: index('idx_chunks_vertical').on(t.vertical) }),
-);

@@ -160,12 +160,11 @@ apps/web/                 React frontend
 rumble-knowledge-base/    Markdown docs, one folder per specialist — edit and restart, no build step
 ```
 
-**Backend file naming.** A dotted `<subject>.<role>.ts` name marks a module's
-architectural entry point — the roles are `controller`, `client`, `service`,
-`executor`, `normalizer`, `stream`, `sync`. Everything else is plain
-kebab-case: leaf utilities, pure helpers, and one-file-per-tool handlers under
-`modules/tools/`. So `wahoo.controller.ts` is where the Wahoo module is entered,
-while `fit-parser.ts` beside it is a pure bytes-in/data-out helper.
+**Conventions.**
+
+- `<subject>.<role>.ts` — module entry points (`controller`, `client`, `service`, `executor`, `normalizer`, `stream`, `sync`)
+- `kebab-case.ts` — leaf utilities, pure helpers, and per-tool handlers under `modules/tools/`
+- Every database query is scoped by `athleteId` — no exceptions
 
 ## Development
 
@@ -183,5 +182,4 @@ Being honest about the edges, because a portfolio piece that claims to be finish
 
 - **Per-athlete document upload** (training plans, lab results via Claude's Files API) is designed but not built.
 - **Test coverage is deliberately scoped** to pure logic and the highest-risk backend paths — auth and data scoping, the multi-round tool loop. React components and the Wahoo sync flow aren't covered.
-- **`kb_chunks` is a dead table.** It held the old embeddings; nothing queries it. Left in place rather than writing a migration for zero benefit.
 - **The compiled path gets less exercise than `pnpm dev`.** `pnpm build` now copies the prompt `.md` files into `dist/` (`tsc` alone doesn't), and the built module has been verified to load its prompts and resolve the knowledge base — but day-to-day development runs from source via `tsx`, so the compiled path isn't covered by CI.
