@@ -36,7 +36,7 @@ jobs:
         run: pnpm lint
 
       - name: Test
-        run: pnpm test
+        run: pnpm test --forceExit
 
       - name: Build
         run: pnpm --filter @rumble/web build
