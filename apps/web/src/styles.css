@@ -38,6 +38,16 @@
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
   --radius-xl: 1.25rem;
+
+  /* Fluid type scale — grows gently from laptop to the 1600px layout cap,
+     then the clamp max kicks in so text never blows out on 4K displays. */
+  --text-xs:   clamp(0.7rem,   0.9vw,  0.8rem);
+  --text-sm:   clamp(0.8rem,   1vw,    0.875rem);
+  --text-base: clamp(0.875rem, 1.1vw,  1rem);
+  --text-lg:   clamp(1rem,     1.3vw,  1.25rem);
+  --text-xl:   clamp(1.1rem,   1.6vw,  1.5rem);
+  --text-2xl:  clamp(1.25rem,  2vw,    2rem);
+  --text-3xl:  clamp(1.5rem,   2.5vw,  2.5rem);
 }
 
 /* assistant-ui's chat panel uses its own --aui-* token namespace (HSL

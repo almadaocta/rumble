@@ -42,7 +42,8 @@ function App() {
   const chat = <CoachChat firstName={firstName} suggestions={suggestions} />;
 
   return (
-    <div className="h-dvh w-screen flex flex-col lg:flex-row overflow-hidden bg-background text-foreground">
+    <div className="h-dvh w-screen overflow-hidden bg-background text-foreground flex justify-center">
+    <div className="w-full max-w-[1600px] h-full flex flex-col lg:flex-row overflow-hidden">
       {/* Left column: Today / Nutrition / History (+ Chat tab below lg) */}
       <div className="w-full lg:w-1/2 shrink-0 h-full flex flex-col min-h-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full min-h-0 gap-0">
@@ -83,6 +84,7 @@ function App() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
