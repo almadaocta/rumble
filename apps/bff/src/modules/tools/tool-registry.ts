@@ -347,7 +347,7 @@ export const TOOL_REGISTRY = {
     handler: updateAthleteProfile,
     label: 'Updating profile',
     description:
-      "Update the athlete's profile data. Use when the athlete shares personal info (weight, age, height, available hours, experience level, goals). Save immediately so it persists across sessions. Does NOT require confirmation — just save what they tell you.",
+      "Update the athlete's profile data. Use when the athlete shares personal info (weight, age, height, available hours, experience level, goals). Save immediately so it persists across sessions. Does NOT require confirmation — just save what they tell you. Also updates daily_calorie_adjustment when the athlete sets a calorie goal (deficit, surplus, or maintenance).",
     input_schema: {
       type: 'object',
       properties: {
@@ -369,6 +369,10 @@ export const TOOL_REGISTRY = {
         coaching_tone: {
           type: 'number',
           description: 'Coaching tone preference 1-10 (1=gentle, 10=demanding)',
+        },
+        daily_calorie_adjustment: {
+          type: 'number',
+          description: 'Daily calorie adjustment in kcal. Negative = deficit (weight loss), positive = surplus (fuelling/gain), 0 = maintenance. Applied on top of BMR to set the daily calorie target.',
         },
       },
     },

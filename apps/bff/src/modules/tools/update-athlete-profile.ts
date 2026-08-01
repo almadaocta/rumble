@@ -14,6 +14,7 @@ const ProfileUpdate = z.object({
   experience_level: z.enum(EXPERIENCE_LEVELS).optional(),
   primary_goal: z.enum(PRIMARY_GOALS).optional(),
   coaching_tone: z.number().optional(),
+  daily_calorie_adjustment: z.number().int().optional(),
 });
 
 export async function updateAthleteProfile(
@@ -32,6 +33,7 @@ export async function updateAthleteProfile(
   if (updates.experience_level != null) setValues.experienceLevel = updates.experience_level;
   if (updates.primary_goal != null) setValues.primaryGoal = updates.primary_goal;
   if (updates.coaching_tone != null) setValues.coachingTone = updates.coaching_tone;
+  if (updates.daily_calorie_adjustment != null) setValues.dailyCalorieAdjustment = updates.daily_calorie_adjustment;
 
   if (Object.keys(setValues).length === 0) {
     return { ok: false, error: 'No valid fields provided to update' };

@@ -14,16 +14,18 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { migrateTestDb, seedAthlete } from '../../test-utils/test-db.js';
 import { db } from '../../db/client.js';
-import { activities, trainingPlans, planSessions, coachingNotes } from '../../db/schema.js';
+import { activities, trainingPlans, planSessions, coachingNotes, athletes } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { ToolOutcome } from './tool-result.js';
 
 import { analyzeActivity } from './analyze-activity.js';
+import { updateAthleteProfile } from './update-athlete-profile.js';
 import { updateTrainingPlan } from './update-training-plan.js';
 import { logSessionFeedback } from './log-session-feedback.js';
 import { pushWorkoutToDevice } from './push-workout-to-device.js';
 import { getTrainingData } from './get-training-data.js';
 import { getBodyMetrics } from './get-body-metrics.js';
+import { getNutritionLog } from './get-nutrition-log.js';
 
 /** Ids belonging to athlete A, rebuilt for each case. */
 interface Fixture {
@@ -220,6 +222,22 @@ describe('tenant isolation across id-accepting tools', () => {
     expect(readiness).not.toHaveProperty('note');
   });
 
+  it('updateAthleteProfile can set daily_calorie_adjustment', async () => {
+    const athleteId = await seedAthlete('Calorie Adjustment Athlete');
+
+    const result = await updateAthleteProfile({ daily_calorie_adjustment: -500 }, athleteId);
+
+    expect(result.ok).toBe(true);
+    expect((result as Record<string, unknown>).updated_fields).toContain('daily_calorie_adjustment');
+
+    // Verify it was actually persisted
+    const [row] = await db
+      .select({ dailyCalorieAdjustment: athletes.dailyCalorieAdjustment })
+      .from(athletes)
+      .where(eq(athletes.id, athleteId));
+    expect(row.dailyCalorieAdjustment).toBe(-500);
+  });
+
   it('getTrainingData list response omits redundant computed fields', async () => {
     const athleteId = await seedAthlete('Redundant Fields Athlete');
     // Insert an activity with known distance
@@ -247,5 +265,52 @@ describe('tenant isolation across id-accepting tools', () => {
     // These should still be present
     expect(acts[0]).toHaveProperty('durationS');
     expect(acts[0]).toHaveProperty('distanceKm');
+  });
+
+  it('getNutritionLog single-day response includes calorie_target and calories_burned', async () => {
+    const athleteId = await seedAthlete('Calorie Target Athlete');
+
+    // Set up complete biometrics
+    await db.update(athletes)
+      .set({ weightKg: 75, heightCm: 178, age: 30, sex: 'male', dailyCalorieAdjustment: 0 })
+      .where(eq(athletes.id, athleteId));
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Seed an activity with calories
+    await db.insert(activities).values({
+      id: randomUUID(),
+      athleteId,
+      externalId: 'nut-log-burned-1',
+      source: 'wahoo',
+      type: 'ride',
+      name: 'Ride',
+      startedAt: new Date(),
+      durationS: 3600,
+      calories: 700,
+    });
+
+    const result = await getNutritionLog({ date: today, days: 1 }, athleteId);
+
+    expect(result.ok).toBe(true);
+    const r = result as Record<string, unknown>;
+    // Male, 75kg, 178cm, 30yo = 1718 BMR; adjustment 0 = 1718 target
+    expect(r.calorie_target).toBe(1718);
+    expect(r.calories_burned).toBe(700);
+    // net = consumed (0, no meals logged) - burned (700) = -700
+    expect(r.net_calories).toBe(-700);
+  });
+
+  it('getNutritionLog returns null calorie_target when profile incomplete', async () => {
+    const athleteId = await seedAthlete('Incomplete Profile Athlete');
+    const today = new Date().toISOString().slice(0, 10);
+
+    const result = await getNutritionLog({ date: today, days: 1 }, athleteId);
+
+    expect(result.ok).toBe(true);
+    const r = result as Record<string, unknown>;
+    expect(r.calorie_target).toBeNull();
+    expect(r.calories_burned).toBe(0);
+    expect(r.net_calories).toBeNull();
   });
 });
