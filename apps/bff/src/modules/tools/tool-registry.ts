@@ -13,6 +13,7 @@ import { getCoachingNotes } from './get-coaching-notes.js';
 import { pushWorkoutToDevice } from './push-workout-to-device.js';
 import { getAthleteContext } from './get-athlete-context.js';
 import { analyzeActivity } from './analyze-activity.js';
+import { recomputePowerCurve } from './recompute-power-curve.js';
 import type { ToolDefinition } from '../claude/claude.client.js';
 import type { ToolOutcome } from './tool-result.js';
 import { ACTIVITY_TYPES } from '../activities/normalized-activity.js';
@@ -455,6 +456,16 @@ export const TOOL_REGISTRY = {
         },
       },
       required: ['session_id'],
+    },
+  },
+  recompute_power_curve: {
+    handler: recomputePowerCurve,
+    label: 'Recomputing power curve',
+    description:
+      'Recompute the athlete\'s all-time power curve bests from scratch across all activities. Use when the athlete asks to recalculate their power curve, after importing historical activities, or when bests seem incorrect. This is a heavy operation — only call when explicitly requested.',
+    input_schema: {
+      type: 'object',
+      properties: {},
     },
   },
 } satisfies Record<string, ToolSpec>;
