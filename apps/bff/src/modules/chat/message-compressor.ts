@@ -59,10 +59,10 @@ export function compressMessages(messages: ChatMessage[]): ChatMessage[] {
     estimatedTokens: totalTokens,
   });
 
-  if (totalTokens <= MAX_TOKENS) return messages;
-  if (pairStarts.length <= KEEP_RECENT_PAIRS) return messages;
+  if (totalTokens <= MAX_TOKENS && pairStarts.length <= KEEP_RECENT_PAIRS) return messages;
 
-  const cutoffIdx = pairStarts[pairStarts.length - KEEP_RECENT_PAIRS];
+  const keepCount = Math.min(KEEP_RECENT_PAIRS, pairStarts.length - 1);
+  const cutoffIdx = pairStarts[pairStarts.length - keepCount];
   const result = messages.slice(cutoffIdx);
   const newTokens = estimateTokens(result);
 

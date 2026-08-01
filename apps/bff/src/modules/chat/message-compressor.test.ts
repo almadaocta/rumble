@@ -93,4 +93,21 @@ describe('compressMessages', () => {
     expect(rendered).toContain('question 19');
     expect(rendered).not.toContain('question 0 ');
   });
+
+  it('trims when token budget is exceeded even with few turns', () => {
+    // 3 turns, each with a massive message — well under KEEP_RECENT_PAIRS=10
+    // but blows the 120k token budget. The AND bug lets this through untrimmed.
+    const HUGE = 'x'.repeat(200_000); // ~50k tokens each, 3 × 50k = 150k > 120k
+    const messages = [
+      userTurn(`q1 ${HUGE}`),
+      assistantText('a1'),
+      userTurn(`q2 ${HUGE}`),
+      assistantText('a2'),
+      userTurn(`q3 ${HUGE}`),
+      assistantText('a3'),
+    ];
+    const result = compressMessages(messages);
+    // Should be trimmed — not equal to the original
+    expect(result.length).toBeLessThan(messages.length);
+  });
 });
