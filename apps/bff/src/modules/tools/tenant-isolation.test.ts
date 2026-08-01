@@ -201,5 +201,10 @@ describe('tenant isolation across id-accepting tools', () => {
     expect(result).not.toHaveProperty('source');
     expect(result).not.toHaveProperty('athleteId');
     expect(result).not.toHaveProperty('createdAt');
+    // Expected fields must be present
+    expect(result).toHaveProperty('id');
+    expect(result).toHaveProperty('name');
+    expect(result).toHaveProperty('type');
+    expect(result).toHaveProperty('durationS');
   });
 });
