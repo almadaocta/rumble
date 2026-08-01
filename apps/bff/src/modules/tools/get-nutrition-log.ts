@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { db } from '../../db/client.js';
-import { nutritionLogs } from '../../db/schema.js';
+import { nutritionLogs, activities, athletes } from '../../db/schema.js';
 import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
 import type { ToolOutcome } from './tool-result.js';
 import { utcDateString } from '../../lib/format.js';
+import { computeTarget } from '../metrics/bmr.js';
 
 const GetNutritionLogArgs = z.object({
   date: z.string().optional(),
@@ -35,6 +36,45 @@ export async function getNutritionLog(
       { calories: 0, carbs_g: 0, protein_g: 0, fat_g: 0 },
     );
 
+    const todayStart = new Date(`${targetDate}T00:00:00.000Z`);
+    const todayEnd = new Date(`${targetDate}T23:59:59.999Z`);
+
+    const [burnedRows, athleteRows] = await Promise.all([
+      db
+        .select({ total: sql<string>`COALESCE(SUM(${activities.calories}), 0)` })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.athleteId, athleteId),
+            gte(activities.startedAt, todayStart),
+            lte(activities.startedAt, todayEnd),
+          ),
+        ),
+      db
+        .select({
+          weightKg: athletes.weightKg,
+          heightCm: athletes.heightCm,
+          age: athletes.age,
+          sex: athletes.sex,
+          dailyCalorieAdjustment: athletes.dailyCalorieAdjustment,
+        })
+        .from(athletes)
+        .where(eq(athletes.id, athleteId))
+        .limit(1),
+    ]);
+
+    const caloriesBurned = Math.round(Number(burnedRows[0]?.total ?? 0));
+    const athlete = athleteRows[0];
+    const calorieTarget = athlete
+      ? computeTarget(
+          { weightKg: athlete.weightKg, heightCm: athlete.heightCm, age: athlete.age, sex: athlete.sex },
+          athlete.dailyCalorieAdjustment ?? 0,
+        )
+      : null;
+    const netCalories = calorieTarget != null
+      ? Math.round(totals.calories - caloriesBurned)
+      : null;
+
     return {
       ok: true,
       date: targetDate,
@@ -54,6 +94,9 @@ export async function getNutritionLog(
       })),
       totals,
       meal_count: logs.length,
+      calorie_target: calorieTarget,
+      calories_burned: caloriesBurned,
+      net_calories: netCalories,
     };
   }
 
