@@ -28,6 +28,7 @@ export const athletes = sqliteTable('athletes', {
   experienceLevel: text('experience_level'),
   primaryGoal: text('primary_goal'),
   coachingTone: integer('coaching_tone').notNull().default(5),
+  dailyCalorieAdjustment: integer('daily_calorie_adjustment').notNull().default(0),
   createdAt: timestamptz('created_at').notNull().default(sql`(unixepoch())`),
 });
 
