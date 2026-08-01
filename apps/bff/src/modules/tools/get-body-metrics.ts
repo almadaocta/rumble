@@ -62,7 +62,6 @@ export async function getBodyMetrics(
     },
     readiness: {
       source: 'tsb',
-      note: 'Wahoo does not provide sleep/HRV. Readiness is derived from Training Stress Balance (CTL - ATL). Add Garmin/Whoop post-MVP for sleep and HRV data.',
       form_status: formStatus,
       tsb,
       ctl: num(latest?.ctl),

@@ -23,6 +23,7 @@ import { updateTrainingPlan } from './update-training-plan.js';
 import { logSessionFeedback } from './log-session-feedback.js';
 import { pushWorkoutToDevice } from './push-workout-to-device.js';
 import { getTrainingData } from './get-training-data.js';
+import { getBodyMetrics } from './get-body-metrics.js';
 
 /** Ids belonging to athlete A, rebuilt for each case. */
 interface Fixture {
@@ -207,6 +208,16 @@ describe('tenant isolation across id-accepting tools', () => {
     expect(result).toHaveProperty('name');
     expect(result).toHaveProperty('type');
     expect(result).toHaveProperty('durationS');
+  });
+
+  it('getBodyMetrics result does not contain the static Wahoo note', async () => {
+    const athleteId = await seedAthlete('Wahoo Note Athlete');
+
+    const result = await getBodyMetrics({}, athleteId);
+
+    expect(result.ok).toBe(true);
+    const readiness = (result as Record<string, unknown>).readiness as Record<string, unknown>;
+    expect(readiness).not.toHaveProperty('note');
   });
 
   it('getTrainingData list response omits redundant computed fields', async () => {
