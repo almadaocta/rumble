@@ -371,7 +371,7 @@ export const TOOL_REGISTRY = {
           description: 'Coaching tone preference 1-10 (1=gentle, 10=demanding)',
         },
         daily_calorie_adjustment: {
-          type: 'number',
+          type: 'integer',
           description: 'Daily calorie adjustment in kcal. Negative = deficit (weight loss), positive = surplus (fuelling/gain), 0 = maintenance. Applied on top of BMR to set the daily calorie target.',
         },
       },
