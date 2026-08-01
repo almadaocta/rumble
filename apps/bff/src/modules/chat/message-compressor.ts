@@ -61,7 +61,9 @@ export function compressMessages(messages: ChatMessage[]): ChatMessage[] {
 
   if (totalTokens <= MAX_TOKENS && pairStarts.length <= KEEP_RECENT_PAIRS) return messages;
 
+  // - 1: guarantees at least one message is dropped when token budget triggers trim
   const keepCount = Math.min(KEEP_RECENT_PAIRS, pairStarts.length - 1);
+  if (keepCount <= 0) return messages;
   const cutoffIdx = pairStarts[pairStarts.length - keepCount];
   const result = messages.slice(cutoffIdx);
   const newTokens = estimateTokens(result);
@@ -71,7 +73,7 @@ export function compressMessages(messages: ChatMessage[]): ChatMessage[] {
     messagesAfter: result.length,
     tokensBefore: totalTokens,
     tokensAfter: newTokens,
-    keptUserTurns: KEEP_RECENT_PAIRS,
+    keptUserTurns: keepCount,
   });
 
   return result;
