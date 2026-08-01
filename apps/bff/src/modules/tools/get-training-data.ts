@@ -155,7 +155,24 @@ async function getActivityDetail(
   includeLaps: boolean,
 ): Promise<ToolOutcome> {
   const [activity] = await db
-    .select()
+    .select({
+      id: activities.id,
+      type: activities.type,
+      name: activities.name,
+      startedAt: activities.startedAt,
+      durationS: activities.durationS,
+      avgPower: activities.avgPower,
+      normPower: activities.normPower,
+      maxPower: activities.maxPower,
+      avgHr: activities.avgHr,
+      maxHr: activities.maxHr,
+      avgCadence: activities.avgCadence,
+      tss: activities.tss,
+      intensityFactor: activities.intensityFactor,
+      distanceM: activities.distanceM,
+      elevationM: activities.elevationM,
+      calories: activities.calories,
+    })
     .from(activities)
     .where(and(eq(activities.id, activityId), eq(activities.athleteId, athleteId)))
     .limit(1);

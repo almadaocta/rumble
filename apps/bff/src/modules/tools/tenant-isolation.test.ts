@@ -21,6 +21,7 @@ import { analyzeActivity } from './analyze-activity.js';
 import { updateTrainingPlan } from './update-training-plan.js';
 import { logSessionFeedback } from './log-session-feedback.js';
 import { pushWorkoutToDevice } from './push-workout-to-device.js';
+import { getTrainingData } from './get-training-data.js';
 
 /** Ids belonging to athlete A, rebuilt for each case. */
 interface Fixture {
@@ -174,5 +175,31 @@ describe('tenant isolation across id-accepting tools', () => {
     // analyze_activity is deliberately not asserted here: the seeded activity
     // has no stream rows, so it legitimately declines for the owner too. Its
     // owner-path success is covered in cross-tenant.test.ts, which seeds streams.
+  });
+
+  it('getTrainingData activity detail does not expose implementation fields', async () => {
+    const [activity] = await db
+      .insert(activities)
+      .values({
+        athleteId: athleteA,
+        source: 'wahoo',
+        externalId: 'detail-test-1',
+        type: 'ride',
+        name: 'Detail test ride',
+        startedAt: new Date('2026-04-01T09:00:00Z'),
+        durationS: 1800,
+        tss: 50,
+      })
+      .returning();
+
+    const result = await getTrainingData({ activity_id: activity.id }, athleteA);
+
+    expect(result.ok).toBe(true);
+    // Implementation fields must not be present
+    expect(result).not.toHaveProperty('fitFileUrl');
+    expect(result).not.toHaveProperty('externalId');
+    expect(result).not.toHaveProperty('source');
+    expect(result).not.toHaveProperty('athleteId');
+    expect(result).not.toHaveProperty('createdAt');
   });
 });
