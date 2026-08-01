@@ -94,6 +94,41 @@ describe('compressMessages', () => {
     expect(rendered).not.toContain('question 0 ');
   });
 
+  it('stubs out large tool results from turns outside the recency window', () => {
+    const PAYLOAD = 'x'.repeat(8000); // simulate a big tool result
+    const messages: ChatMessage[] = [];
+
+    // Build 15 turns — some old turns that should be stubbed
+    for (let i = 0; i < 15; i++) {
+      const id = `toolu_${i}`;
+      messages.push(userTurn(`question ${i} ${'y'.repeat(60_000)}`));
+      messages.push(assistantToolUse(id));
+      messages.push(toolResult(id, PAYLOAD));
+      messages.push(assistantText(`answer ${i}`));
+    }
+
+    const result = compressMessages(messages);
+
+    // Old tool result blocks should have been stubbed
+    const toolResultMessages = result.filter((m) => {
+      if (typeof m.content === 'string') return false;
+      return m.content.some((b) => b.type === 'tool_result');
+    });
+
+    // At least some tool_result messages should have been stubbed
+    const stubbedCount = toolResultMessages.filter((m) => {
+      if (typeof m.content === 'string') return false;
+      return m.content.some(
+        (b) => b.type === 'tool_result' && (b as { content?: string }).content === '[tool result omitted]',
+      );
+    }).length;
+
+    expect(stubbedCount).toBeGreaterThan(0);
+
+    // No orphaned tool results
+    expect(hasOrphanedToolResult(result)).toBe(false);
+  });
+
   it('trims when token budget is exceeded even with few turns', () => {
     // 3 turns, each with a massive message — well under KEEP_RECENT_PAIRS=10
     // but blows the 120k token budget. The AND bug lets this through untrimmed.
