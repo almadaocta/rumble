@@ -11,9 +11,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import request from 'supertest';
+import { randomUUID } from 'node:crypto';
 import { migrateTestDb, seedAthlete } from '../../test-utils/test-db.js';
 import { db } from '../../db/client.js';
-import { nutritionLogs } from '../../db/schema.js';
+import { nutritionLogs, activities, athletes } from '../../db/schema.js';
+import { eq } from 'drizzle-orm';
 import { utcDateString } from '../../lib/format.js';
 import { nutritionController } from './nutrition.controller.js';
 
@@ -81,6 +83,9 @@ describe('GET /api/nutrition/today', () => {
       carbsG: null,
       proteinG: null,
       fatG: null,
+      burned: 0,
+      target: null,
+      calorieAdjustment: 0,
       meals: [],
     });
   });
@@ -171,6 +176,60 @@ describe('GET /api/nutrition/today', () => {
 
     expect(res.body.logged).toBe(false);
     expect(res.body.meals).toEqual([]);
+  });
+
+  it('returns burned:0 when no activities today', async () => {
+    const res = await request(app).get('/api/nutrition/today');
+    expect(res.status).toBe(200);
+    expect(res.body.burned).toBe(0);
+  });
+
+  it('returns burned calories from today activities', async () => {
+    await db.insert(activities).values({
+      id: randomUUID(),
+      athleteId,
+      externalId: 'burned-test-1',
+      source: 'wahoo',
+      type: 'ride',
+      name: 'Morning Ride',
+      startedAt: FIXED_NOW,
+      durationS: 3600,
+      calories: 650,
+    });
+
+    const res = await request(app).get('/api/nutrition/today');
+    expect(res.status).toBe(200);
+    expect(res.body.burned).toBe(650);
+  });
+
+  it('returns null target when athlete profile is incomplete', async () => {
+    // Default seeded athlete has no weight/height/age
+    const res = await request(app).get('/api/nutrition/today');
+    expect(res.status).toBe(200);
+    expect(res.body.target).toBeNull();
+    expect(res.body.calorieAdjustment).toBe(0);
+  });
+
+  it('returns computed target when athlete profile is complete', async () => {
+    await db.update(athletes)
+      .set({ weightKg: 75, heightCm: 178, age: 30, sex: 'male', dailyCalorieAdjustment: 0 })
+      .where(eq(athletes.id, athleteId));
+
+    const res = await request(app).get('/api/nutrition/today');
+    expect(res.status).toBe(200);
+    // Male, 75kg, 178cm, 30yo: 10*75 + 6.25*178 - 5*30 + 5 = 1717.5 → 1718
+    expect(res.body.target).toBe(1718);
+    expect(res.body.calorieAdjustment).toBe(0);
+  });
+
+  it('applies calorie adjustment to target', async () => {
+    await db.update(athletes)
+      .set({ weightKg: 75, heightCm: 178, age: 30, sex: 'male', dailyCalorieAdjustment: -500 })
+      .where(eq(athletes.id, athleteId));
+
+    const res = await request(app).get('/api/nutrition/today');
+    expect(res.status).toBe(200);
+    expect(res.body.target).toBe(1218); // 1718 - 500
   });
 });
 
