@@ -1,4 +1,4 @@
-interface BiometricInputs {
+export interface BiometricInputs {
   weightKg: number | null | undefined;
   heightCm: number | null | undefined;
   age: number | null | undefined;
