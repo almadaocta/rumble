@@ -52,9 +52,9 @@ function loadPrompt(file: string): string {
 }
 
 // Orchestrator: owns the conversation, decides which tools/specialists to
-// call. Tool-routing judgment matters most here, so it gets the strongest
-// model. Change this one constant to retune cost/quality for the whole app.
-export const ORCHESTRATOR_MODEL = 'claude-opus-4-8';
+// call. Sonnet handles multi-step tool-routing reliably at ~5× less cost than
+// Opus. Change this one constant to retune cost/quality for the whole app.
+export const ORCHESTRATOR_MODEL = 'claude-sonnet-4-5';
 
 /** Memoised, so the cached prompt prefix stays byte-identical across calls. */
 export function orchestratorSystemPrompt(): string {

@@ -30,7 +30,7 @@ The chat UI isn't the hard part. The orchestration is.
 
 A single prompt stuffed with four coaching personas and every reference document produces a model that sounds like a committee and grounds itself in whatever happens to be nearest in context. Rumble splits the job in two:
 
-- **One orchestrator** (`claude-opus-4-8`) owns the conversation and the athlete's data. It decides what a question actually needs — a database lookup, a plan revision, real domain expertise, or just an answer.
+- **One orchestrator** (`claude-sonnet-4-5`) owns the conversation and the athlete's data. It decides what a question actually needs — a database lookup, a plan revision, real domain expertise, or just an answer.
 - **Four specialists** (`claude-haiku-4-5`), each consulted in isolation. A specialist's context contains *only* its own persona and its own document library. It never sees the other three, and never sees the conversation.
 
 That buys two things. Each specialist's voice and grounding stay intact as the knowledge base grows, and expensive reasoning goes only where judgment is actually required — tool routing — while narrow, grounded Q&A runs on a model that costs a fifth as much and answers faster.
@@ -41,7 +41,7 @@ flowchart TD
     FE <-->|SSE| BFF["Express BFF"]
 
     BFF -->|"obviously just a meal log?"| FastPath["⚡ Fast path<br/><i>Haiku, single call</i>"]
-    BFF -->|everything else| Orch["🧠 Orchestrator<br/><i>Claude Opus</i>"]
+    BFF -->|everything else| Orch["🧠 Orchestrator<br/><i>Claude Sonnet</i>"]
 
     Orch -->|15 tools| Tools["Tools<br/><i>training data · plans · profile<br/>nutrition · device push</i>"]
     Orch -->|consult_specialist| Spec["Specialists<br/><i>Claude Haiku ×4</i>"]
@@ -71,7 +71,7 @@ sequenceDiagram
     autonumber
     actor A as Athlete
     participant B as Express BFF
-    participant O as Orchestrator (Opus)
+    participant O as Orchestrator (Sonnet)
     participant T as Tools
     participant D as SQLite
     participant S as Recovery specialist (Haiku)
