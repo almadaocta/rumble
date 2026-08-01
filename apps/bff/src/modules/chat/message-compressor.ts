@@ -6,6 +6,9 @@ const log = createLogger('context');
 const CHARS_PER_TOKEN = 4;
 const MAX_TOKENS = 120_000;
 const KEEP_RECENT_PAIRS = 10;
+// Tool-result payloads are stubbed for turns older than this threshold.
+// Independent from KEEP_RECENT_PAIRS (which governs hard message trimming).
+const STUB_RECENT_PAIRS = 5;
 
 function messageChars(m: ChatMessage): number {
   return typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length;
@@ -105,9 +108,7 @@ export function compressMessages(messages: ChatMessage[]): ChatMessage[] {
   // older than KEEP_RECENT_PAIRS turns within it.
   const keptBoundaries = findUserTurnBoundaries(trimmed);
   const stubKeepCount = Math.min(KEEP_RECENT_PAIRS, keptBoundaries.length);
-  // Use half the keep window as the "recent" zone so stubbing is visible even
-  // when the kept window is exactly KEEP_RECENT_PAIRS turns.
-  const stubRecentCount = Math.ceil(stubKeepCount / 2);
+  const stubRecentCount = Math.min(STUB_RECENT_PAIRS, stubKeepCount);
   const stubCutoffIdx =
     keptBoundaries.length > stubRecentCount
       ? keptBoundaries[keptBoundaries.length - stubRecentCount]
