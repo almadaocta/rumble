@@ -6,7 +6,7 @@ Built on Claude with a multi-specialist orchestration architecture. Runs entirel
 
 ## Why I built this
 
-I'm a cyclist. The data already exists — power, heart rate, nutrition, training load — but nothing reasons across all of it at once. Talking to Claude about training is useful only if you paste in the numbers yourself. The conversation is stateless. The model doesn't know your FTP changed last month or that your goal race is in 19 days.
+I'm a cyclist. The data already exists — power, heart rate, nutrition, training load — but nothing reasons across all of it at once. Talking to Claude about training is useful only if you paste in the numbers yourself. Memory features help with continuity, but they summarize into prose — they don't preserve that your FTP is 285w, that your TSB is -22, or that you've done four Zone 2 rides in a row. Precision gets lost exactly where it matters most.
 
 The obvious fix is tools: give Claude access to your training data and let it query what it needs. That works, but it hits a ceiling fast. A single model with four coaching domains stuffed into one prompt sounds like a committee and grounds itself in whatever's nearest in context. Token cost compounds as conversation history grows. And general-purpose tool use has no opinion on *which* questions warrant real domain expertise versus a quick lookup.
 
