@@ -154,6 +154,12 @@ export interface NutritionToday {
   carbsG: number | null;
   proteinG: number | null;
   fatG: number | null;
+  /** Total calories burned from today's activities. Always 0 or more. */
+  burned: number;
+  /** Computed daily calorie target (BMR + adjustment). Null if profile incomplete. */
+  target: number | null;
+  /** The stored daily_calorie_adjustment. 0 = maintenance, negative = deficit, positive = surplus. */
+  calorieAdjustment: number;
   meals: Meal[];
 }
 

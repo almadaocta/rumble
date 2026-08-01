@@ -6,17 +6,14 @@ import { cn } from '@/lib/utils';
 import { getJson } from '@/lib/api';
 import type { Meal, NutritionToday } from '@/lib/api-types';
 
-// Daily targets aren't stored per-athlete anywhere yet (no macro-goal fields
-// on the athletes table) — fixed defaults until that exists.
-const CALORIE_TARGET = 2800;
 // Categorical, like the calendar's activity-type colors (see COLOR_SYSTEM.md)
 // — three macros just need to be visually distinct from each other, not
 // mapped to brand/intensity/secondary meaning. Protein deliberately isn't
 // black: black is the app's neutral/structural color, not a data category.
 const MACRO_TARGETS = {
-  carbs: { label: 'Carbs', target: 350, unit: 'g', color: 'var(--color-orange)' },
+  carbs:   { label: 'Carbs',   target: 350, unit: 'g', color: 'var(--color-orange)' },
   protein: { label: 'Protein', target: 140, unit: 'g', color: '#92400e' },
-  fat: { label: 'Fat', target: 80, unit: 'g', color: 'var(--color-lime)' },
+  fat:     { label: 'Fat',     target: 80,  unit: 'g', color: 'var(--color-lime)' },
 } as const;
 
 function mealMacros(m: Meal): string {
@@ -40,17 +37,25 @@ export function NutritionTab() {
     if (data) setToday(data);
   }, []);
 
-  useEffect(() => { fetchToday(); const t = setInterval(fetchToday, 60000); return () => clearInterval(t); }, [fetchToday]);
+  useEffect(() => {
+    fetchToday();
+    const t = setInterval(fetchToday, 60000);
+    return () => clearInterval(t);
+  }, [fetchToday]);
 
   const noneLogged = !today?.logged;
   const consumed = today?.calories ?? 0;
-  const remaining = Math.max(0, CALORIE_TARGET - consumed);
+  const burned = today?.burned ?? 0;
+  const target = today?.target ?? null;
+  // Left = target budget minus net food intake (consumed - burned).
+  // A burned calorie expands the budget; a consumed calorie reduces it.
+  const left = target != null ? Math.max(0, target - consumed + burned) : null;
   const meals = today?.meals ?? [];
 
   const macros = [
-    { ...MACRO_TARGETS.carbs, current: today?.carbsG ?? null },
+    { ...MACRO_TARGETS.carbs,   current: today?.carbsG   ?? null },
     { ...MACRO_TARGETS.protein, current: today?.proteinG ?? null },
-    { ...MACRO_TARGETS.fat, current: today?.fatG ?? null },
+    { ...MACRO_TARGETS.fat,     current: today?.fatG     ?? null },
   ];
 
   return (
@@ -60,9 +65,34 @@ export function NutritionTab() {
         <CardContent>
           <SegmentedStats
             items={[
-              { value: consumed, unit: 'kcal', label: 'Consumed', intensity: consumed / CALORIE_TARGET, noData: noneLogged },
-              { value: CALORIE_TARGET, unit: 'kcal', label: 'Target', intensity: 1 },
-              { value: remaining, unit: 'kcal', label: 'Left', intensity: remaining / CALORIE_TARGET, noData: noneLogged },
+              {
+                value: consumed,
+                unit: 'kcal',
+                label: 'Consumed',
+                intensity: target != null ? consumed / target : 0,
+                noData: noneLogged,
+              },
+              {
+                value: burned,
+                unit: 'kcal',
+                label: 'Burned',
+                intensity: target != null ? burned / target : 0,
+                noData: burned === 0,
+              },
+              {
+                value: target ?? 0,
+                unit: 'kcal',
+                label: 'Target',
+                intensity: 1,
+                noData: target == null,
+              },
+              {
+                value: left ?? 0,
+                unit: 'kcal',
+                label: 'Left',
+                intensity: target != null && left != null ? left / target : 0,
+                noData: noneLogged || target == null,
+              },
             ]}
           />
 
