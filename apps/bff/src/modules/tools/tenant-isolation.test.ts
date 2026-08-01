@@ -11,6 +11,7 @@
  * this a security boundary rather than a correctness nicety.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { migrateTestDb, seedAthlete } from '../../test-utils/test-db.js';
 import { db } from '../../db/client.js';
 import { activities, trainingPlans, planSessions, coachingNotes } from '../../db/schema.js';
@@ -206,5 +207,34 @@ describe('tenant isolation across id-accepting tools', () => {
     expect(result).toHaveProperty('name');
     expect(result).toHaveProperty('type');
     expect(result).toHaveProperty('durationS');
+  });
+
+  it('getTrainingData list response omits redundant computed fields', async () => {
+    const athleteId = await seedAthlete('Redundant Fields Athlete');
+    // Insert an activity with known distance
+    await db.insert(activities).values({
+      id: randomUUID(),
+      athleteId,
+      externalId: 'redundant-test-1',
+      source: 'manual',
+      type: 'ride',
+      name: 'Test Ride',
+      startedAt: new Date(),
+      durationS: 3600,
+      distanceM: 50000,
+    });
+
+    const result = await getTrainingData({ days: 30 }, athleteId);
+
+    expect(result.ok).toBe(true);
+    const acts = (result as Record<string, unknown>).activities as Record<string, unknown>[];
+    expect(acts.length).toBeGreaterThan(0);
+
+    // Redundant fields must not be present on list items
+    expect(acts[0]).not.toHaveProperty('durationFormatted');
+    expect(acts[0]).not.toHaveProperty('distanceM');
+    // These should still be present
+    expect(acts[0]).toHaveProperty('durationS');
+    expect(acts[0]).toHaveProperty('distanceKm');
   });
 });

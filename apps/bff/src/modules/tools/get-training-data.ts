@@ -91,12 +91,11 @@ export async function getTrainingData(
 
   const result: Record<string, unknown> = {
     period,
-    activities: recentActivities.map((a) => ({
-      ...a,
-      durationFormatted: formatDuration(a.durationS),
+    activities: recentActivities.map(({ distanceM, ...rest }) => ({
+      ...rest,
       // `!= null`: a turbo session records 0 m, which is a measurement, not a
       // gap. Truthiness reports it to the coach as unknown distance.
-      distanceKm: a.distanceM != null ? (Number(a.distanceM) / 1000).toFixed(1) : null,
+      distanceKm: distanceM != null ? (Number(distanceM) / 1000).toFixed(1) : null,
     })),
     totalActivities: recentActivities.length,
     totalTss: recentActivities.reduce((sum, a) => sum + Number(a.tss ?? 0), 0),
@@ -179,10 +178,10 @@ async function getActivityDetail(
 
   if (!activity) return { ok: false, error: 'Activity not found' };
 
+  const { distanceM, ...activityWithoutDistance } = activity;
   const result: Record<string, unknown> = {
-    ...activity,
-    durationFormatted: formatDuration(activity.durationS),
-    distanceKm: activity.distanceM != null ? (Number(activity.distanceM) / 1000).toFixed(1) : null,
+    ...activityWithoutDistance,
+    distanceKm: distanceM != null ? (Number(distanceM) / 1000).toFixed(1) : null,
   };
 
   if (includeLaps) {
