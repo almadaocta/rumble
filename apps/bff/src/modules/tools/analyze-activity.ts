@@ -1,9 +1,30 @@
 import { z } from 'zod';
 import { db } from '../../db/client.js';
-import { activities, activityLaps, activityStreams, athletes } from '../../db/schema.js';
+import { activities, activityLaps, activityStreams, athletes, personalBests } from '../../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import type { ToolOutcome } from './tool-result.js';
 import { formatDuration } from '../../lib/format.js';
+import { computeBestsFromPower, DURATIONS } from '../metrics/power-curve.js';
+import type { BestsMap } from '../metrics/power-curve.js';
+import { updateBestsForActivity } from '../metrics/power-bests.js';
+import { createLogger } from '../../logger.js';
+
+const log = createLogger('analyze-activity');
+
+const DURATION_LABEL_MAP: Record<keyof typeof DURATIONS, string> = {
+  best1s: '1s',
+  best3s: '3s',
+  best10s: '10s',
+  best30s: '30s',
+  best1min: '1min',
+  best5min: '5min',
+  best10min: '10min',
+  best15min: '15min',
+  best20min: '20min',
+  best30min: '30min',
+  best1hr: '1hr',
+  best2hr: '2hr',
+};
 
 const AnalyzeActivityArgs = z.object({
   activity_id: z.string(),
@@ -41,11 +62,10 @@ export async function analyzeActivity(
     };
   }
 
-  const [athlete] = await db
-    .select({ ftp: athletes.ftp })
-    .from(athletes)
-    .where(eq(athletes.id, athleteId))
-    .limit(1);
+  const [[athlete], [storedBests]] = await Promise.all([
+    db.select({ ftp: athletes.ftp }).from(athletes).where(eq(athletes.id, athleteId)).limit(1),
+    db.select().from(personalBests).where(eq(personalBests.athleteId, athleteId)).limit(1),
+  ]);
 
   const ftp = athlete?.ftp ?? null;
   const power = stream.power as number[] | null;
@@ -71,7 +91,26 @@ export async function analyzeActivity(
   };
 
   if (power?.length) {
-    result.power = computePowerMetrics(power, ftp);
+    const bests: BestsMap | null = storedBests
+      ? {
+          best1s: storedBests.best1s,
+          best3s: storedBests.best3s,
+          best10s: storedBests.best10s,
+          best30s: storedBests.best30s,
+          best1min: storedBests.best1min,
+          best5min: storedBests.best5min,
+          best10min: storedBests.best10min,
+          best15min: storedBests.best15min,
+          best20min: storedBests.best20min,
+          best30min: storedBests.best30min,
+          best1hr: storedBests.best1hr,
+          best2hr: storedBests.best2hr,
+        }
+      : null;
+    result.power = computePowerMetrics(power, ftp, bests);
+    updateBestsForActivity(athleteId, activity_id).catch((err) =>
+      log.warn('Failed to update power bests after analysis', { err }),
+    );
   }
 
   if (heartRate?.length) {
@@ -96,7 +135,11 @@ export async function analyzeActivity(
   return { ok: true, ...result };
 }
 
-function computePowerMetrics(power: number[], ftp: number | null) {
+function computePowerMetrics(
+  power: number[],
+  ftp: number | null,
+  storedBests: BestsMap | null,
+) {
   const nonZero = power.filter((p) => p > 0);
   if (nonZero.length === 0) return { avg: 0, max: 0 };
 
@@ -118,6 +161,20 @@ function computePowerMetrics(power: number[], ftp: number | null) {
     middle: Math.round(mean(thirds[1])),
     last: Math.round(mean(thirds[2])),
   };
+
+  const activityBests = computeBestsFromPower(power);
+  const curve: Record<string, { watts: number; pr: boolean } | null> = {};
+  for (const key of Object.keys(DURATIONS) as Array<keyof typeof DURATIONS>) {
+    const label = DURATION_LABEL_MAP[key];
+    const watts = activityBests[key];
+    if (watts == null) {
+      curve[label] = null;
+    } else {
+      const stored = storedBests?.[key] ?? null;
+      curve[label] = { watts, pr: stored == null || watts > stored };
+    }
+  }
+  metrics.curve = curve;
 
   return metrics;
 }
