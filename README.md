@@ -1,8 +1,22 @@
 # Rumble
 
-**An AI cycling coach that runs entirely on your own machine.** One conversation, backed by an orchestrator that delegates to a team of isolated domain specialists — a cycling coach, a nutritionist, a strength & conditioning coach, and a recovery specialist — each with its own narrow system prompt and its own cited, research-grounded knowledge base.
+**A personal AI cycling coach grounded in your actual data.** Connects to your training history, fitness metrics, and nutrition logs — then answers coaching questions with real context instead of generic advice.
 
-Bring your own [Anthropic API key](https://console.anthropic.com). No server to run beyond your own laptop, no account, no hosted service, no vector database.
+Built on Claude with a multi-specialist orchestration architecture. Runs entirely on your own machine — bring your own [Anthropic API key](https://console.anthropic.com). No server, no account, no hosted service, no vector database.
+
+## Why I built this
+
+I'm a cyclist. I track everything — power, heart rate, nutrition, sleep, training load — across Wahoo, spreadsheets, and whatever app is current. The data exists. What doesn't exist is anything that can reason across all of it at once.
+
+Talking to Claude or ChatGPT about training is useful, but you're doing all the work: copying in numbers, explaining context, translating TSS into something the model understands. The conversation is stateless. The model doesn't know your FTP changed last month, that you raced two weekends ago, or that you've been under-eating on long rides.
+
+The gap isn't intelligence — it's grounding. A general-purpose model asked about recovery doesn't know your CTL is 87 and dropping, that your last four rides were all Zone 2, or that your goal race is in 19 days. It gives generic advice because it has generic inputs.
+
+Rumble is what happens when you close that gap: a coach that has your actual training history, your current fitness metrics, your nutrition logs, and a structured knowledge base built from real sports science literature — and can reason across all of it in a single conversation. "Am I ready to race in three weeks?" gets an answer grounded in your TSB trend and your training history, not a generic periodization lecture.
+
+The secondary goal was to build something architecturally honest about what AI coaching actually requires. Most demos in this space are a chat box over a vector database. The interesting problems are in the orchestration layer — how you route questions to the right expertise, how you keep specialists from contaminating each other's context, how you manage token cost across a multi-turn conversation with real data attached.
+
+---
 
 ## Demo
 
