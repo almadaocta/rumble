@@ -203,6 +203,22 @@ export const nutritionLogs = sqliteTable(
   (t) => ({ dateIdx: index('idx_nutrition_date').on(t.athleteId, t.date) }),
 );
 
+export const weightLogs = sqliteTable(
+  'weight_logs',
+  {
+    id: uuidPk(),
+    athleteId: uuidRef('athlete_id').notNull().references(() => athletes.id, { onDelete: 'cascade' }),
+    date: dateCol('date').notNull(),
+    weightKg: real('weight_kg').notNull(),
+    note: text('note'),
+    source: text('source').notNull().default('chat'),
+    createdAt: timestamptz('created_at').notNull().default(sql`(unixepoch())`),
+  },
+  (t) => ({
+    uniqDate: unique('uq_weight_logs_athlete_date').on(t.athleteId, t.date),
+  }),
+);
+
 export const personalBests = sqliteTable(
   'personal_bests',
   {
