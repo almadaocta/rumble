@@ -4,6 +4,7 @@ import { buildSlimPreamble } from '../athlete/context-preamble.js';
 import { pipeStreamWithToolExecution, pipeFastPathReply } from './chat.stream.js';
 import { compressMessages } from './message-compressor.js';
 import { tryMealLogFastPath } from './fast-path-meal-log.js';
+import { tryWeightFastPath } from './fast-path-weight.js';
 import { db } from '../../db/client.js';
 import {
   athletes,
@@ -138,12 +139,21 @@ chatController.post('/chats', async (req: Request, res: Response) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    // Meal logging is structured extraction, not reasoning — skip the full
-    // Opus orchestrator (two full calls) entirely when a message is purely
-    // "I ate X," resolved instead with one cheap Haiku call.
-    const fastPath = typeof latestUserMessage.content === 'string'
-      ? await tryMealLogFastPath(latestUserMessage.content, athleteId)
-      : { handled: false as const };
+    // Meal logging and weight logging are structured extraction, not reasoning
+    // — skip the full Opus orchestrator (two full calls) entirely when a
+    // message is purely "I ate X" or "I weigh X," resolved instead with one
+    // cheap Haiku call. Meal is checked first; if it handles the message we
+    // never call the weight classifier.
+    const rawText =
+      typeof latestUserMessage.content === 'string' ? latestUserMessage.content : null;
+
+    let fastPath: { handled: false } | { handled: true; confirmationText: string } = {
+      handled: false,
+    };
+    if (rawText) {
+      const mealResult = await tryMealLogFastPath(rawText, athleteId);
+      fastPath = mealResult.handled ? mealResult : await tryWeightFastPath(rawText, athleteId);
+    }
 
     const producedMessages = fastPath.handled
       ? pipeFastPathReply(res, chatId, fastPath.confirmationText)
