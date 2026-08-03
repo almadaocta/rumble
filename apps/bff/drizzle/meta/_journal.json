@@ -22,6 +22,13 @@
       "when": 1753920000001,
       "tag": "0002_calorie_adjustment",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1753920000002,
+      "tag": "0003_weight_logs",
+      "breakpoints": true
     }
   ]
 }
