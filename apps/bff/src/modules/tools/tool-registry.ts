@@ -14,6 +14,7 @@ import { pushWorkoutToDevice } from './push-workout-to-device.js';
 import { getAthleteContext } from './get-athlete-context.js';
 import { analyzeActivity } from './analyze-activity.js';
 import { recomputePowerCurve } from './recompute-power-curve.js';
+import { logWeight } from './log-weight.js';
 import type { ToolDefinition } from '../claude/claude.client.js';
 import type { ToolOutcome } from './tool-result.js';
 import { ACTIVITY_TYPES } from '../activities/normalized-activity.js';
@@ -229,6 +230,33 @@ export const TOOL_REGISTRY = {
         },
       },
       required: ['description'],
+    },
+  },
+  log_weight: {
+    handler: logWeight,
+    label: 'Logging weight',
+    description:
+      'Record the athlete\'s body weight for today or a specified past date. ' +
+      'One entry per day — logging again on the same date replaces the previous value. ' +
+      'Does NOT require confirmation — just save what they tell you. ' +
+      'Use when the athlete reports their weight, e.g. "I weigh 74 kg" or "weighed in at 73.5 this morning".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        weight_kg: {
+          type: 'number',
+          description: 'Body weight in kilograms.',
+        },
+        date: {
+          type: 'string',
+          description: 'ISO date (YYYY-MM-DD). Omit to default to today.',
+        },
+        note: {
+          type: 'string',
+          description: 'Optional context, e.g. "post-race", "morning, fasted".',
+        },
+      },
+      required: ['weight_kg'],
     },
   },
   log_session_feedback: {
