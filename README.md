@@ -30,18 +30,20 @@ The chat UI isn't the hard part. The orchestration is.
 
 A single prompt stuffed with four coaching personas and every reference document produces a model that sounds like a committee and grounds itself in whatever happens to be nearest in context. Rumble splits the job in two:
 
-- **One orchestrator** (`claude-sonnet-4-5`) owns the conversation and the athlete's data. It decides what a question actually needs — a database lookup, a plan revision, real domain expertise, or just an answer.
+- **One orchestrator** (`claude-opus-4-8`) owns the conversation and the athlete's data. It decides what a question actually needs — a database lookup, a plan revision, real domain expertise, or just an answer.
 - **Four specialists** (`claude-haiku-4-5`), each consulted in isolation. A specialist's context contains *only* its own persona and its own document library. It never sees the other three, and never sees the conversation.
 
 That buys two things. Each specialist's voice and grounding stay intact as the knowledge base grows, and expensive reasoning goes only where judgment is actually required — tool routing — while narrow, grounded Q&A runs on a model that costs a fifth as much and answers faster.
+
+**The fast path** exists because meal logging — "had oats and banana before the ride" — is pure structured extraction (text → macros), not coaching judgment. The BFF makes one cheap Haiku call with a forced tool call (`toolChoice: { type: 'tool', name: 'classify_meal_log' }`), which simultaneously classifies the message and extracts the nutrition fields in a single response capped at 512 tokens. If `is_meal_log` is true and the Zod parse succeeds, the meal is written directly and a confirmation is streamed back — skipping the Opus orchestrator entirely. Any failure at any step falls through silently to the full orchestrator path; the user experience is never degraded. Two fast paths exist today: **meal logging** ("had oats and banana") and **weight logging** ("I weigh 74 kg"). Both follow the same pattern. Any failure at any step of either fast path falls through silently to the full orchestrator.
 
 ```mermaid
 flowchart TD
     User(["🚴 Athlete"]) --> FE["React 19 frontend<br/><i>dashboard + assistant-ui chat</i>"]
     FE <-->|SSE| BFF["Express BFF"]
 
-    BFF -->|"obviously just a meal log?"| FastPath["⚡ Fast path<br/><i>Haiku, single call</i>"]
-    BFF -->|everything else| Orch["🧠 Orchestrator<br/><i>Claude Sonnet</i>"]
+    BFF -->|"Haiku forced tool call:\nmeal log or weight log?"| FastPath["⚡ Fast path<br/><i>Haiku · classify + extract<br/>single call · ≤512 tokens</i>"]
+    BFF -->|"not fast-path<br/>(or any failure)"| Orch["🧠 Orchestrator<br/><i>Claude Opus</i>"]
 
     Orch -->|15 tools| Tools["Tools<br/><i>training data · plans · profile<br/>nutrition · device push</i>"]
     Orch -->|consult_specialist| Spec["Specialists<br/><i>Claude Haiku ×4</i>"]
