@@ -2,7 +2,7 @@
 
 **A personal AI cycling coach grounded in your actual data.** Connects to your training history, fitness metrics, and nutrition logs — then answers coaching questions with real context instead of generic advice.
 
-Built on Claude with a multi-specialist orchestration architecture. Runs entirely on your own machine — bring your own [Anthropic API key](https://console.anthropic.com). No server, no account, no hosted service, no vector database.
+Built on Claude with a multi-specialist orchestration architecture. Runs entirely on your own machine — bring your own [Anthropic API key](https://console.anthropic.com). No server to run beyond your own laptop, no account, no hosted service, no vector database.
 
 ## Why I built this
 
@@ -20,7 +20,10 @@ The result is a coach that answers "Am I ready to race in three weeks?" with you
 
 |                                    |                                    |                                    |
 | :--------------------------------: | :--------------------------------: | :--------------------------------: |
-| ![](docs/screenshots/1.png)        | ![](docs/screenshots/2.png)        | ![](docs/screenshots/3.png)        |
+| ![Today](docs/screenshots/1.png)   | ![Nutrition](docs/screenshots/2.png) | ![History](docs/screenshots/3.png) |
+| **Today** — FTP, weekly load, training stress balance, next session | **Nutrition** — macros logged via the fast path against daily target | **History** — ride calendar, plan vs. what actually happened |
+
+Coach chat runs alongside every tab (right pane above) — one conversation, not a separate screen.
 
 ---
 
@@ -28,7 +31,7 @@ The result is a coach that answers "Am I ready to race in three weeks?" with you
 
 The chat UI isn't the hard part. The orchestration is.
 
-A single prompt stuffed with four coaching personas and every reference document produces a model that sounds like a committee and grounds itself in whatever happens to be nearest in context. Rumble splits the job in two:
+Stuffing four coaching personas and every reference document into one prompt is the failure mode described above. Rumble splits that single prompt into two layers instead of trying to prompt-engineer around it:
 
 - **One orchestrator** (`claude-opus-4-8`) owns the conversation and the athlete's data. It decides what a question actually needs — a database lookup, a plan revision, real domain expertise, or just an answer.
 - **Four specialists** (`claude-haiku-4-5`), each consulted in isolation. A specialist's context contains *only* its own persona and its own document library. It never sees the other three, and never sees the conversation.
@@ -73,7 +76,7 @@ sequenceDiagram
     autonumber
     actor A as Athlete
     participant B as Express BFF
-    participant O as Orchestrator (Sonnet)
+    participant O as Orchestrator (Opus)
     participant T as Tools
     participant D as SQLite
     participant S as Recovery specialist (Haiku)
@@ -144,7 +147,7 @@ Every API call to Claude carries three categories of tokens: **cached** (paid on
 | All 15 tool schemas | Ephemeral on last tool in array — caches the whole block | ~3,200 |
 | Specialist persona + full KB | Ephemeral prefix — memoised at startup, sorted deterministically | ~9k–14k |
 
-Caching is a **prefix match** — one changed byte invalidates everything after it. The ordering rule: freeze the static prefix, put anything that varies after the last cache breakpoint. This is why the slim preamble (which has a live timestamp) is a separate block placed *after* the cached system prompt.
+Caching is a prefix match (see "Prompt caching" above for why). In practice: the slim preamble, which carries a live timestamp, is a separate block placed *after* the cached system prompt — so it never invalidates the cache ahead of it.
 
 Specialist KBs are sent in full rather than retrieved via RAG. The largest library is ~14k tokens — 7% of Haiku's context window. At that size, whole-library cached prefills cost roughly the same as four retrieved chunks uncached, with no relevance floor, no embedding pipeline, and no sync step. See "No vector database" above for the measurement that justified this.
 
