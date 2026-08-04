@@ -36,7 +36,13 @@ jobs:
         run: pnpm lint
 
       - name: Test
-        run: pnpm test
+        # TEMPORARY: hanging-process reporter alongside the default one —
+        # CI hangs after the last test file reports done and never reaches
+        # the "Test Files passed" summary, which pnpm test alone doesn't
+        # explain. This reporter polls process._getActiveHandles() and
+        # prints exactly what's keeping the process alive. Remove once the
+        # culprit is found and fixed.
+        run: pnpm test -- --reporter=default --reporter=hanging-process
 
       - name: Build
         run: pnpm --filter @rumble/web build
