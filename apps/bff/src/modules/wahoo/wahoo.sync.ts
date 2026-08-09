@@ -7,13 +7,24 @@ import { normalizeWahooWorkout } from './wahoo.normalizer.js';
 import { downloadAndParseFit, type ParsedFitFile } from '../activities/fit-parser.js';
 import { recomputeFromHistory } from '../metrics/metrics.service.js';
 import { recomputeAllBests } from '../metrics/power-bests.js';
-import { upsertActivity, storeFitDetails } from '../activities/activity-store.js';
+import { upsertActivity, storeFitDetails, activityExists } from '../activities/activity-store.js';
 import { persistActivity } from '../activities/activity-ingest.js';
 import { createLogger, describeError } from '../../logger.js';
 
 const log = createLogger('wahoo-sync');
 const fitLog = createLogger('fit-parser');
 
+/**
+ * Pages through Wahoo workouts and imports whatever isn't already in the DB.
+ *
+ * Wahoo returns workouts sorted by `starts` descending with no since/updated
+ * filter to ask for (confirmed against their API reference — /v1/workouts
+ * takes only page/per_page), so the only way to ask for "just new" is to walk
+ * pages newest-first and stop at the first workout we've already imported:
+ * everything after it is older and already synced. On a first-ever connect
+ * nothing exists yet, so this naturally walks the athlete's entire history —
+ * the same function serves both the initial backfill and every later resync.
+ */
 export async function syncFullHistory(athleteId: string): Promise<{ imported: number }> {
   const token = await wahooTokenManager.ensureValidToken(athleteId);
 
@@ -23,10 +34,11 @@ export async function syncFullHistory(athleteId: string): Promise<{ imported: nu
   let page = 1;
   let imported = 0;
   let hasMore = true;
+  let reachedKnownWorkout = false;
 
-  log.info('Starting full history sync', { athleteId });
+  log.info('Starting history sync', { athleteId });
 
-  while (hasMore) {
+  while (hasMore && !reachedKnownWorkout) {
     const response = await wahooClient.getWorkouts(token, { page, per_page: 50 });
 
     if (!response.workouts || response.workouts.length === 0) {
@@ -35,6 +47,11 @@ export async function syncFullHistory(athleteId: string): Promise<{ imported: nu
 
     for (const workout of response.workouts) {
       if (!workout.workout_summary) continue;
+
+      if (await activityExists(athleteId, 'wahoo', String(workout.id))) {
+        reachedKnownWorkout = true;
+        break;
+      }
 
       const normalized = normalizeWahooWorkout(workout.workout_summary, ftp, {
         id: workout.id,
@@ -56,7 +73,7 @@ export async function syncFullHistory(athleteId: string): Promise<{ imported: nu
 
     log.debug('Page imported', { page, workouts: response.workouts.length, total: imported });
 
-    if (response.workouts.length < (response.per_page || 50)) {
+    if (reachedKnownWorkout || response.workouts.length < (response.per_page || 50)) {
       hasMore = false;
     } else {
       page++;
@@ -64,14 +81,14 @@ export async function syncFullHistory(athleteId: string): Promise<{ imported: nu
   }
 
   if (imported > 0) {
-    log.info('Recomputing CTL/ATL/TSB from full history');
+    log.info('Recomputing CTL/ATL/TSB from history');
     await recomputeFromHistory(athleteId);
     await recomputeAllBests(athleteId);
   }
 
   await wahooTokenManager.updateLastSync(athleteId);
 
-  log.info('Full sync complete', { imported });
+  log.info('Sync complete', { imported });
   return { imported };
 }
 

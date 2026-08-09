@@ -11,9 +11,34 @@
  */
 import { db } from '../../db/client.js';
 import { activities, activityLaps, activityStreams } from '../../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { NormalizedActivity } from './normalized-activity.js';
 import type { ParsedFitFile } from './fit-parser.js';
+
+/**
+ * Whether an activity for this (athleteId, source, externalId) has already
+ * been imported. Wahoo sync uses this to stop paging once it reaches
+ * already-known workouts, rather than re-fetching and re-parsing FIT files
+ * for activities that haven't changed.
+ */
+export async function activityExists(
+  athleteId: string,
+  source: string,
+  externalId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: activities.id })
+    .from(activities)
+    .where(
+      and(
+        eq(activities.athleteId, athleteId),
+        eq(activities.source, source),
+        eq(activities.externalId, externalId),
+      ),
+    )
+    .limit(1);
+  return row != null;
+}
 
 /**
  * Inserts a normalized activity, or updates it in place when the

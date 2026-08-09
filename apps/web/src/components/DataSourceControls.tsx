@@ -17,6 +17,16 @@ import type { HealthStatus, WahooStatus, WahooSyncStarted } from '@/lib/api-type
 /** How often to re-check while a sync is running. */
 const SYNC_POLL_MS = 3000;
 
+/**
+ * How often to check for a Wahoo-side sync we didn't start.
+ *
+ * A workout can also arrive via Wahoo's webhook — synced in the background on
+ * their schedule, not ours — which never flips syncStatus to "syncing" here,
+ * so the fast poll above never engages. Without this, the calendar only
+ * picks up that ride on a manual page refresh.
+ */
+const IDLE_POLL_MS = 20000;
+
 export function DataSourceControls({ onDataChanged }: { onDataChanged: () => void | Promise<void> }) {
   const [wahoo, setWahoo] = useState<WahooStatus | null>(null);
   // null = not yet known. The Connect button stays hidden until this answers,
@@ -38,20 +48,36 @@ export function DataSourceControls({ onDataChanged }: { onDataChanged: () => voi
     getJson<WahooStatus>('/api/wahoo/status').then(setWahoo).catch(() => {});
   }, []);
 
-  // Poll only while a sync is in flight, and tell the parent once it settles so
-  // it can pick up whatever the sync imported.
+  // Read inside the poll tick below, not the effect closure — the interval
+  // keeps firing across many ticks of a single effect run, and each tick needs
+  // the previous tick's result, not whatever `wahoo` was when the effect started.
+  const wahooRef = useRef(wahoo);
   useEffect(() => {
-    if (wahoo?.syncStatus !== 'syncing') return;
+    wahooRef.current = wahoo;
+  }, [wahoo]);
+
+  // Poll continuously while connected — fast during a sync we started, slower
+  // otherwise so a workout that arrived via Wahoo's webhook (synced on their
+  // schedule, not ours, so syncStatus here never flips to "syncing") still
+  // reaches the calendar without a manual page refresh.
+  useEffect(() => {
+    if (!wahoo?.connected) return;
+    const intervalMs = wahoo.syncStatus === 'syncing' ? SYNC_POLL_MS : IDLE_POLL_MS;
     const timer = setInterval(async () => {
       // A failed poll keeps the previous state and tries again next tick,
       // rather than flipping the UI out of "syncing" on a blip.
       const next = await getJson<WahooStatus>('/api/wahoo/status').catch(() => null);
       if (!next) return;
+
+      const prev = wahooRef.current;
+      const finishedSyncing = prev?.syncStatus === 'syncing' && next.syncStatus !== 'syncing';
+      const newActivitySynced = !!next.lastSyncAt && next.lastSyncAt !== prev?.lastSyncAt;
+
       setWahoo(next);
-      if (next.syncStatus !== 'syncing') await onDataChanged();
-    }, SYNC_POLL_MS);
+      if (finishedSyncing || newActivitySynced) await onDataChanged();
+    }, intervalMs);
     return () => clearInterval(timer);
-  }, [wahoo?.syncStatus, onDataChanged]);
+  }, [wahoo?.connected, wahoo?.syncStatus, onDataChanged]);
 
   const handleSync = useCallback(async () => {
     try {
