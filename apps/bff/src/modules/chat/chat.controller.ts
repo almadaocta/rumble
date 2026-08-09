@@ -135,6 +135,17 @@ chatController.post('/chats', async (req: Request, res: Response) => {
 
     const newUserMessage: ChatMessage = { role: 'user', content: latestUserMessage.content };
 
+    // Persisted immediately, before generation starts — not batched with the
+    // reply at the end. A full turn (tool rounds, specialist consults) can run
+    // long enough that a refresh mid-generation used to show the chat as it
+    // was before this message existed, because nothing had been written yet.
+    await db.insert(chatMessages).values({
+      id: randomUUID(),
+      chatId,
+      role: newUserMessage.role,
+      content: newUserMessage.content,
+    });
+
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
@@ -164,17 +175,20 @@ chatController.post('/chats', async (req: Request, res: Response) => {
           messages: compressMessages([...history, newUserMessage]),
         });
 
-    // Persist the user turn plus whatever the orchestrator produced (tool
-    // round + final answer, or just the final answer if no tools were used).
-    const toPersist = [newUserMessage, ...producedMessages];
-    await db.insert(chatMessages).values(
-      toPersist.map((m) => ({
-        id: randomUUID(),
-        chatId,
-        role: m.role,
-        content: m.content,
-      })),
-    );
+    // The user turn is already persisted above. Persist whatever the
+    // orchestrator produced (tool round + final answer, or just the final
+    // answer if no tools were used) — skipped entirely if producedMessages
+    // is empty, which the DB driver would otherwise reject as an empty insert.
+    if (producedMessages.length > 0) {
+      await db.insert(chatMessages).values(
+        producedMessages.map((m) => ({
+          id: randomUUID(),
+          chatId,
+          role: m.role,
+          content: m.content,
+        })),
+      );
+    }
 
     res.end();
   } catch (err) {

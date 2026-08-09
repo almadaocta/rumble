@@ -15,16 +15,21 @@ import { getCoachingNotes } from './get-coaching-notes.js';
 
 interface NotesResult {
   ok: boolean;
-  notes?: Array<{ content: string; expires_at: string | null }>;
+  notes?: Array<{ content: string; category: string; expires_at: string | null }>;
   count?: number;
 }
 
 const HOUR = 60 * 60 * 1000;
 
-async function addNote(athleteId: string, content: string, expiresAt: Date | null) {
+async function addNote(
+  athleteId: string,
+  content: string,
+  expiresAt: Date | null,
+  category = 'general',
+) {
   await db.insert(coachingNotes).values({
     athleteId,
-    category: 'general',
+    category,
     content,
     expiresAt: expiresAt ?? undefined,
   });
@@ -92,5 +97,28 @@ describe('getCoachingNotes', () => {
 
     const result = (await getCoachingNotes({}, athleteId)) as NotesResult;
     expect(result.notes?.map((n) => n.content)).toEqual(['My note']);
+  });
+
+  it('filters by category when given one', async () => {
+    await addNote(athleteId, 'Pacing plan for Girona', null, 'decision');
+    await addNote(athleteId, 'Macro targets', null, 'nutrition');
+
+    const result = (await getCoachingNotes({ category: 'decision' }, athleteId)) as NotesResult;
+    expect(result.notes?.map((n) => n.content)).toEqual(['Pacing plan for Girona']);
+  });
+
+  it('returns all active notes when category is omitted', async () => {
+    await addNote(athleteId, 'Pacing plan for Girona', null, 'decision');
+    await addNote(athleteId, 'Macro targets', null, 'nutrition');
+
+    const result = (await getCoachingNotes({}, athleteId)) as NotesResult;
+    expect(result.count).toBe(2);
+  });
+
+  it('falls back to unfiltered on an unrecognized category rather than rejecting the call', async () => {
+    await addNote(athleteId, 'Pacing plan for Girona', null, 'decision');
+
+    const result = (await getCoachingNotes({ category: 'not-a-real-category' }, athleteId)) as NotesResult;
+    expect(result.ok).toBe(true);
   });
 });

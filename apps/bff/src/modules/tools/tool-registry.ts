@@ -439,7 +439,7 @@ export const TOOL_REGISTRY = {
     handler: saveCoachingNote,
     label: 'Saving note',
     description:
-      "Save a coaching note for future reference. Use when the athlete mentions something worth remembering that doesn't fit structured data: preferences, temporary constraints, health observations, schedule quirks, fueling experiments, decisions in progress. Notes persist across sessions and appear in the context preamble. Does NOT require confirmation.",
+      "Save a coaching note for future reference. Use when the athlete mentions something worth remembering that doesn't fit structured data: preferences, temporary constraints, health observations, schedule quirks, fueling experiments, decisions in progress. Notes persist across sessions; health/constraint/preference notes appear in full in the context preamble, others are archived (see get_coaching_notes). Does NOT require confirmation. When this note replaces an earlier one (e.g. a revised plan or corrected decision) rather than adding new information, pass supersedes_note_id so the old one retires instead of both sitting side by side indefinitely.",
     input_schema: {
       type: 'object',
       properties: {
@@ -456,6 +456,10 @@ export const TOOL_REGISTRY = {
           type: 'number',
           description: 'Optional: auto-expire the note after N days. Use for temporary things like "bikepacking trip next weekend" or "taking antibiotics this week".',
         },
+        supersedes_note_id: {
+          type: 'string',
+          description: 'Optional: id of a prior note (from a previous save_coaching_note or get_coaching_notes result) that this one replaces. The prior note is expired immediately.',
+        },
       },
       required: ['content'],
     },
@@ -464,10 +468,16 @@ export const TOOL_REGISTRY = {
     handler: getCoachingNotes,
     label: 'Reading notes',
     description:
-      "Retrieve all active coaching notes for the athlete. Notes are already included in the context preamble, so only call this if you need the full list or to check for specific notes.",
+      "Retrieve active coaching notes for the athlete. health/constraint/preference notes are already in the preamble in full — no need to call this for those. Everything else (decision/nutrition/schedule/observation/general) only appears in the preamble as a per-category count; call this with that category when the current topic needs the actual content. Omit category for the full list.",
     input_schema: {
       type: 'object',
-      properties: {},
+      properties: {
+        category: {
+          type: 'string',
+          enum: [...NOTE_CATEGORIES],
+          description: 'Only return notes in this category. Omit for all active notes.',
+        },
+      },
     },
   },
   push_workout_to_device: {

@@ -100,3 +100,13 @@ export const NOTE_CATEGORIES = [
   'nutrition',
   'general',
 ] as const;
+
+/**
+ * Categories safety/identity-critical enough to send in full on every turn —
+ * injury status and standing constraints shape what's safe to recommend
+ * regardless of what the conversation is about. Everything else is only
+ * summarized in the preamble (an index) and fetched in full via
+ * get_coaching_notes when it's actually relevant, to keep per-turn cost from
+ * growing unbounded as notes accumulate over a season.
+ */
+export const PINNED_NOTE_CATEGORIES = ['health', 'constraint', 'preference'] as const;

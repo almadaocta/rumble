@@ -133,6 +133,14 @@ There's no real auth (single local athlete, no accounts), but every route resolv
 
 Every database query across every tool and controller is scoped by `athleteId`. That was audited by hand, and the audit found two real cross-tenant bugs — both now have regression coverage in `chat.controller.test.ts` and `log-session-feedback.test.ts`, using a harness that simulates two athletes without needing multi-user auth to exist yet.
 
+### 4. Durable memory across chats, not RAG or auto-summarization
+
+A brand new chat thread has no message history of its own, but the coaching relationship has to survive that — FTP changes, an injury constraint, a pacing plan agreed on last week. The obvious answers are an LLM summarizer over old transcripts, or embedding old messages for retrieval. Rumble does neither, for the same reason it skipped RAG for the knowledge base: there's a simpler mechanism that's already sitting there.
+
+The model writes structured coaching notes (`save_coaching_note`) as facts come up in conversation — categorized (`health`, `constraint`, `preference`, `decision`, `nutrition`, `schedule`, `observation`, `general`), no separate summarization pass needed since the note is a byproduct of the same tool call. Every turn's preamble includes the safety/identity-critical categories in full — the ones that should shape a response regardless of what the conversation is about — and archives the rest behind a per-category count plus `get_coaching_notes({ category })`, so per-turn cost stays roughly flat instead of growing with a season's worth of decisions and observations. When a note revises rather than extends a prior one (a corrected pacing plan superseding the one it replaces), `supersedes_note_id` retires the old note instead of both accumulating in the archive indefinitely.
+
+The user's own message is persisted the instant the request is received, too — not batched with the (possibly multi-round, multi-tool-call) reply. A page refresh mid-generation shows what was actually sent instead of reverting to the chat's state before that turn.
+
 ---
 
 ## Token budget
@@ -156,6 +164,8 @@ Specialist KBs are sent in full rather than retrieved via RAG. The largest libra
 Conversation history is the only unbounded input. `message-compressor.ts` trims it when *either* the token estimate exceeds 120k *or* the turn count exceeds 10 recent pairs — whichever comes first. The trim point lands on a real user turn boundary (never mid-tool-round, which would orphan a `tool_result` and cause an API rejection).
 
 Beyond trimming, old `tool_use`/`tool_result` pairs that fall outside the recency window have their payloads stubbed to `[tool result omitted]`. A tool result from turn 3 is still structurally present (so Claude knows a tool was called) but costs ~5 tokens instead of ~2,000.
+
+Coaching notes are the other input that grows with the athlete's history rather than the conversation — see "Durable memory across chats" above for how those stay bounded per turn.
 
 ### Tool result discipline
 
@@ -236,3 +246,5 @@ Being honest about the edges, because a portfolio piece that claims to be finish
 - **Per-athlete document upload** (training plans, lab results via Claude's Files API) is designed but not built.
 - **Test coverage is deliberately scoped** to pure logic and the highest-risk backend paths — auth and data scoping, the multi-round tool loop. React components and the Wahoo sync flow aren't covered.
 - **The compiled path gets less exercise than `pnpm dev`.** `pnpm build` now copies the prompt `.md` files into `dist/` (`tsc` alone doesn't), and the built module has been verified to load its prompts and resolve the knowledge base — but day-to-day development runs from source via `tsx`, so the compiled path isn't covered by CI.
+- **`getDefaultAthleteId()` has no ordering guarantee.** It's `SELECT ... LIMIT 1` with no `ORDER BY`, on the assumption that exactly one `athletes` row exists — true until something violates it (e.g. a seed script run against the wrong `DATABASE_PATH`, which silently targets a second SQLite file instead of erroring). If a second row ever appears, which one "the athlete" resolves to is undefined, and chats/notes tied to the other row become invisible rather than merged. Fine for a single-tenant local app; the fix is either an explicit invariant check at startup or making this the first thing real auth replaces.
+- **A stale `chatId` retries instead of recovering.** The web client caches the active chat's id in `localStorage`; if the server 404s it (chat deleted, or owned by a different athlete row per the point above), `chat-runtime.ts` throws but never clears the cached id — every subsequent message retries the same dead id and 404s again. Should clear the id and start a fresh chat on a 404 instead.

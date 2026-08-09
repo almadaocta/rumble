@@ -1,8 +1,9 @@
 import { db } from '../../db/client.js';
 import { athletes, activities, dailyMetrics, planSessions, trainingPlans, targetEvents, coachingNotes } from '../../db/schema.js';
-import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
+import { eq, desc, and, or, isNull, gt, gte, lte, sql } from 'drizzle-orm';
 import { formLabel } from '../metrics/training-load.js';
 import { formatDuration, utcDateString } from '../../lib/format.js';
+import { PINNED_NOTE_CATEGORIES } from '../tools/vocabularies.js';
 
 /*
  * Deliberately uncached, and it should stay that way.
@@ -21,15 +22,24 @@ import { formatDuration, utcDateString } from '../../lib/format.js';
  * across the source tables — so staleness cannot survive a write.
  */
 /**
- * The three datasets the slim preamble renders.
+ * The four datasets the slim preamble renders.
  *
  * Separate from fetchAthleteData, which returns seven. This runs on every chat
- * turn and reads only these three; serving it from the wider fetch means four
- * queries per turn — recent activities, target events, weekly TSS and coaching
- * notes — whose results are thrown away.
+ * turn and reads only these four; serving it from the wider fetch means three
+ * queries per turn — recent activities, target events and weekly TSS — whose
+ * results are thrown away.
+ *
+ * Coaching notes are fetched here (not just via the on-demand
+ * get_athlete_context/get_coaching_notes tools) so durable athlete history
+ * survives a brand new chat thread — a fresh chatId has no message history of
+ * its own, and without this the model only sees that history if it happens to
+ * call a tool for it. Only PINNED_NOTE_CATEGORIES render in full in the
+ * preamble though (see buildSlimPreamble); the rest render as a one-line
+ * index, since sending every note in full would grow the preamble unbounded
+ * as a season's worth of notes accumulates.
  */
 async function fetchSlimAthleteData(athleteId: string) {
-  const [athlete, latestMetrics, todaySessions] = await Promise.all([
+  const [athlete, latestMetrics, todaySessions, activeNotes] = await Promise.all([
     db.select().from(athletes).where(eq(athletes.id, athleteId)).limit(1),
     db
       .select()
@@ -38,9 +48,24 @@ async function fetchSlimAthleteData(athleteId: string) {
       .orderBy(desc(dailyMetrics.date))
       .limit(1),
     getSessionsForDate(athleteId, new Date()),
+    getActiveCoachingNotes(athleteId),
   ]);
 
-  return { profile: athlete[0], latestMetrics, todaySessions };
+  return { profile: athlete[0], latestMetrics, todaySessions, activeNotes };
+}
+
+async function getActiveCoachingNotes(athleteId: string) {
+  const now = new Date();
+  return db
+    .select()
+    .from(coachingNotes)
+    .where(
+      and(
+        eq(coachingNotes.athleteId, athleteId),
+        or(isNull(coachingNotes.expiresAt), gt(coachingNotes.expiresAt, now)),
+      ),
+    )
+    .orderBy(desc(coachingNotes.createdAt));
 }
 
 /** The full set, for the detailed context the get_athlete_context tool returns. */
@@ -89,8 +114,15 @@ async function fetchAthleteData(athleteId: string) {
 }
 
 /**
- * Slim preamble (~100-150 tokens) sent on every LLM call.
- * Contains only the essentials: time, identity, current form, today's plan, tone.
+ * Slim preamble sent on every LLM call: time, identity, current form, today's
+ * plan, tone, plus coaching notes. The fixed fields stay ~100-150 tokens.
+ * Notes are two-tiered rather than dumped in full: PINNED_NOTE_CATEGORIES
+ * (health/constraint/preference) render completely, since they're safety- or
+ * identity-critical regardless of what the conversation is about. Everything
+ * else renders as a per-category count — a table of contents pointing at
+ * get_coaching_notes({ category }) — so per-turn cost stays roughly constant
+ * as a season's worth of decisions/observations/nutrition notes accumulates,
+ * instead of growing with the athlete's entire history.
  */
 export async function buildSlimPreamble(athleteId: string): Promise<string> {
   const data = await fetchSlimAthleteData(athleteId);
@@ -130,7 +162,36 @@ export async function buildSlimPreamble(athleteId: string): Promise<string> {
 
   lines.push(`Coaching tone: ${data.profile.coachingTone}/10`);
 
+  const pinnedNotes = data.activeNotes.filter((n) =>
+    (PINNED_NOTE_CATEGORIES as readonly string[]).includes(n.category),
+  );
+  const archivedNotes = data.activeNotes.filter(
+    (n) => !(PINNED_NOTE_CATEGORIES as readonly string[]).includes(n.category),
+  );
+
+  if (pinnedNotes.length > 0) {
+    lines.push('');
+    lines.push('Coaching notes (durable athlete history — read these before asking things you may already know):');
+    for (const note of pinnedNotes) {
+      lines.push(`- [${note.category}] ${note.content}`);
+    }
+  }
+
+  if (archivedNotes.length > 0) {
+    lines.push('');
+    lines.push(
+      `Archived coaching notes: ${archivedNotes.length} more (${categoryCounts(archivedNotes)}) — ` +
+        'call get_coaching_notes({ category }) if the current topic needs that history.',
+    );
+  }
+
   return lines.join('\n');
+}
+
+function categoryCounts(notes: Array<{ category: string }>): string {
+  const counts = new Map<string, number>();
+  for (const n of notes) counts.set(n.category, (counts.get(n.category) ?? 0) + 1);
+  return [...counts.entries()].map(([category, count]) => `${category}: ${count}`).join(', ');
 }
 
 /**
