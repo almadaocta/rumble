@@ -89,6 +89,102 @@ describe('pipeStreamWithToolExecution — multi-round tool calls', () => {
     expect(produced.at(-1)).toEqual({ role: 'assistant', content: 'Plan updated based on the specialist consult.' });
   });
 
+  it('marks the cache breakpoint on the last message, moved forward each round', async () => {
+    // Round 1 has only the seed user turn. Round 2 adds the assistant
+    // tool_use + tool_result from round 1's consult_specialist call — the
+    // breakpoint must move onto that new last message, not stay on the
+    // original user turn, or round 2 would resend round 1's tool exchange
+    // uncached every time (the bug this test guards against).
+    chatStreamMock
+      .mockReturnValueOnce(toolDecision('t1', 'consult_specialist', { specialist: 'cycling_coach', query: 'q' }))
+      .mockReturnValueOnce(textDecision('done'));
+    executeToolCallsMock.mockResolvedValueOnce([
+      { tool_call_id: 't1', name: 'consult_specialist', result: { ok: true, response: 'x' } },
+    ]);
+
+    const res = createMockRes();
+    await pipeStreamWithToolExecution(res, baseCtx);
+
+    expect(chatStreamMock).toHaveBeenCalledTimes(2);
+
+    const round1Messages = chatStreamMock.mock.calls[0][0].messages;
+    expect(round1Messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: baseCtx.messages[0].content, cache_control: { type: 'ephemeral' } },
+        ],
+      },
+    ]);
+
+    const round2Messages = chatStreamMock.mock.calls[1][0].messages;
+    expect(round2Messages).toHaveLength(3);
+    // The original user turn is no longer marked — only one breakpoint exists
+    // in the array at a time, so it never accumulates past the 4-per-request cap.
+    expect(round2Messages[0].content).toBe(baseCtx.messages[0].content);
+    const toolResultMsg = round2Messages[2];
+    expect(toolResultMsg.role).toBe('user');
+    expect(toolResultMsg.content[0]).toMatchObject({
+      type: 'tool_result',
+      tool_use_id: 't1',
+      cache_control: { type: 'ephemeral' },
+    });
+  });
+
+  it('keeps tool schemas on the request but forbids tool use once round budget is exhausted', async () => {
+    chatStreamMock.mockReturnValue(textDecision('answer'));
+    const res = createMockRes();
+    await pipeStreamWithToolExecution(res, baseCtx);
+
+    const call = chatStreamMock.mock.calls[0][0];
+    expect(call.tools).toBeDefined();
+    expect(call.toolChoice).toBeUndefined();
+  });
+
+  it('emits a specialist-message frame with the full consult response, not just a preview', async () => {
+    chatStreamMock
+      .mockReturnValueOnce(toolDecision('t1', 'consult_specialist', { specialist: 'recovery', query: 'q' }))
+      .mockReturnValueOnce(textDecision('Rest up.'));
+
+    executeToolCallsMock.mockResolvedValueOnce([
+      {
+        tool_call_id: 't1',
+        name: 'consult_specialist',
+        result: { ok: true, specialist: 'recovery', response: 'Your TSB says take two easy days.' },
+      },
+    ]);
+
+    const res = createMockRes();
+    await pipeStreamWithToolExecution(res, baseCtx);
+
+    const frames = (res.write as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .map((c) => String(c[0]))
+      .filter((line) => line.includes('specialist-message'))
+      .map((line) => JSON.parse(line.slice('data: '.length)));
+
+    expect(frames).toEqual([
+      { type: 'specialist-message', specialist: 'recovery', text: 'Your TSB says take two easy days.' },
+    ]);
+  });
+
+  it('skips the specialist-message frame on a failed or malformed consult', async () => {
+    chatStreamMock
+      .mockReturnValueOnce(toolDecision('t1', 'consult_specialist', { specialist: 'recovery', query: 'q' }))
+      .mockReturnValueOnce(textDecision('Something went wrong, try again.'));
+
+    executeToolCallsMock.mockResolvedValueOnce([
+      { tool_call_id: 't1', name: 'consult_specialist', result: null, error: 'Specialist returned empty response' },
+    ]);
+
+    const res = createMockRes();
+    await pipeStreamWithToolExecution(res, baseCtx);
+
+    const written = (res.write as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .map((c) => String(c[0]))
+      .join('');
+    expect(written).not.toContain('specialist-message');
+  });
+
   it('answers directly with zero tool calls when none are needed', async () => {
     chatStreamMock.mockReturnValueOnce(textDecision('You had a solid week.'));
 
@@ -102,7 +198,7 @@ describe('pipeStreamWithToolExecution — multi-round tool calls', () => {
 
   it('never calls the model more than MAX_TOOL_ROUNDS times, even if it keeps requesting tools', async () => {
     // A model that (contrary to the contract) keeps emitting tool_use even on
-    // the final round, which is called with no tools attached — this must not
+    // the final round, which is called with tool_choice: none — this must not
     // be able to loop forever.
     chatStreamMock.mockImplementation(() => toolDecision('t', 'get_athlete_context', {}));
     executeToolCallsMock.mockResolvedValue([{ tool_call_id: 't', name: 'get_athlete_context', result: {} }]);
@@ -114,8 +210,11 @@ describe('pipeStreamWithToolExecution — multi-round tool calls', () => {
     // should not require editing this test, and the invariant being pinned is
     // "terminates at the configured bound", not "terminates at four".
     expect(chatStreamMock).toHaveBeenCalledTimes(MAX_TOOL_ROUNDS);
-    // The final round is called with no tools attached.
-    expect(chatStreamMock.mock.calls[MAX_TOOL_ROUNDS - 1][0].tools).toBeUndefined();
+    // The final round keeps the tool schemas (for cache-prefix stability) but
+    // forbids tool use via tool_choice, instead of dropping `tools` entirely.
+    const finalCall = chatStreamMock.mock.calls[MAX_TOOL_ROUNDS - 1][0];
+    expect(finalCall.tools).toBeDefined();
+    expect(finalCall.toolChoice).toEqual({ type: 'none' });
     // The unreachable-guard error is streamed to the client rather than hanging.
     const written = (res.write as unknown as { mock: { calls: unknown[][] } }).mock.calls
       .map((c) => String(c[0]))

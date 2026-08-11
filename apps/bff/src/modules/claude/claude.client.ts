@@ -46,18 +46,27 @@ function toAnthropicTools(tools?: ToolDefinition[]): ToolUnion[] | undefined {
   );
 }
 
+/**
+ * `{ name }` forces a specific tool call (e.g. a classifier that must always
+ * return structured output). `{ type: 'none' }` forbids tool use for this
+ * call while still sending the tool schemas — unlike omitting `tools`
+ * entirely, this keeps the tools+system prompt cache prefix byte-identical,
+ * so a "final answer, no more tools" call doesn't pay to reprocess it.
+ */
+export type ToolChoiceOption = { name: string } | { type: 'none' };
+
 export interface ChatRequest {
   model: string;
   system: string | TextBlockParam[];
   messages: ChatMessage[];
   tools?: ToolDefinition[];
-  /** Force a specific tool call (e.g. a classifier that must always return structured output). */
-  toolChoice?: { name: string };
+  toolChoice?: ToolChoiceOption;
   maxTokens?: number;
 }
 
-function toToolChoice(choice?: { name: string }): ToolChoice | undefined {
-  return choice ? { type: 'tool', name: choice.name } : undefined;
+function toToolChoice(choice?: ToolChoiceOption): ToolChoice | undefined {
+  if (!choice) return undefined;
+  return 'name' in choice ? { type: 'tool', name: choice.name } : { type: 'none' };
 }
 
 /** Non-streaming call — used for the orchestrator's tool-decision phase and specialist consults. */

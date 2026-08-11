@@ -3,10 +3,8 @@ import type { ToolUseBlock, TextBlockParam } from '@anthropic-ai/sdk/resources/m
 import { executeToolCalls } from '../tools/tool.executor.js';
 import { TOOL_REGISTRY, type ToolName } from '../tools/tool-registry.js';
 import type { SseFrame } from './sse-frame.js';
-import type { Specialist } from '../claude/model-config.js';
-import { summarizeConsult } from '../tools/consult-specialist.js';
 import { chatStream, type ChatMessage } from '../claude/claude.client.js';
-import { ORCHESTRATOR_MODEL, orchestratorSystemPrompt } from '../claude/model-config.js';
+import { ORCHESTRATOR_MODEL, orchestratorSystemPrompt, isSpecialist, type Specialist } from '../claude/model-config.js';
 import { ORCHESTRATOR_TOOLS } from '../tools/tool.executor.js';
 import { createLogger } from '../../logger.js';
 
@@ -37,12 +35,17 @@ function buildOrchestratorSystem(contextPreamble: string): TextBlockParam[] {
 
 // Multi-turn chat history grows every turn and was being resent in full,
 // uncached, every time — cost scales with the square of conversation length.
-// Marking a cache breakpoint on the message just before the new user turn
-// lets Anthropic reuse everything up to that point; only the new turn (and,
-// in the tool-call case, the tool result) is evaluated at full price.
-function withHistoryCacheBreakpoint(messages: ChatMessage[]): ChatMessage[] {
-  if (messages.length < 2) return messages;
-  const idx = messages.length - 2;
+// Marking a cache breakpoint on the last message lets Anthropic reuse
+// everything before it; only content after the breakpoint is evaluated at
+// full price. Called fresh before every round's request (not once before the
+// loop) so a multi-round tool-calling turn also benefits: round 2 reads round
+// 1's assistant+tool_result blocks from cache instead of resending them
+// uncached, and so on for round 3. `messages` itself is never mutated with
+// cache_control, so this is the only breakpoint in the array — no risk of
+// drifting past the 4-marker-per-request limit as rounds accumulate.
+function withTrailingCacheBreakpoint(messages: ChatMessage[]): ChatMessage[] {
+  if (messages.length === 0) return messages;
+  const idx = messages.length - 1;
   const target = messages[idx];
   const content = typeof target.content === 'string'
     ? [{ type: 'text' as const, text: target.content, cache_control: { type: 'ephemeral' as const } }]
@@ -183,7 +186,7 @@ export async function pipeStreamWithToolExecution(
 
   try {
     const system = buildOrchestratorSystem(ctx.contextPreamble);
-    let messages = withHistoryCacheBreakpoint(ctx.messages);
+    let messages = ctx.messages;
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const toolsAllowed = round < MAX_TOOL_ROUNDS - 1;
@@ -195,11 +198,17 @@ export async function pipeStreamWithToolExecution(
         msgCount: messages.length,
       });
 
+      // Tools stay on the request even on the forced-answer final round —
+      // dropping the array there would change the tools+system cache prefix
+      // and force a full, uncached reprocess of the orchestrator persona and
+      // the entire history for that call. `tool_choice: none` forbids tool
+      // use just as effectively while keeping the prefix byte-identical.
       const stream = chatStream({
         model: ORCHESTRATOR_MODEL,
         system,
-        messages,
-        tools: toolsAllowed ? ORCHESTRATOR_TOOLS : undefined,
+        messages: withTrailingCacheBreakpoint(messages),
+        tools: ORCHESTRATOR_TOOLS,
+        toolChoice: toolsAllowed ? undefined : { type: 'none' },
         maxTokens: 8192,
       });
 
@@ -245,13 +254,22 @@ export async function pipeStreamWithToolExecution(
       for (const tr of toolResults) {
         const isError = 'error' in tr && tr.error;
         log.debug('Tool finished', { tool: tr.name, ok: !isError, ...(isError ? { error: tr.error } : {}) });
-        if (tr.name === 'consult_specialist') {
-          const summary = summarizeConsult(tr.result);
-          if (summary) sse(res, { type: 'reasoning-delta', delta: `↳ ${summary}\n` });
-        }
       }
 
       closeReasoningStep();
+
+      // A specialist's full answer, in their own voice — a card distinct from
+      // the orchestrator's own text, not folded into the reasoning trace above.
+      // Sent per successful consult_specialist call, in the order they resolved.
+      for (const tr of toolResults) {
+        if (tr.name !== 'consult_specialist' || tr.error) continue;
+        const result = tr.result as { specialist?: unknown; response?: unknown } | null;
+        const specialist = typeof result?.specialist === 'string' ? result.specialist : null;
+        const text = typeof result?.response === 'string' ? result.response : null;
+        if (specialist && isSpecialist(specialist) && text) {
+          sse(res, { type: 'specialist-message', specialist, text });
+        }
+      }
 
       // assistant turn carrying the tool_use blocks — Claude requires the raw
       // content array to be replayed back unchanged for tool_result matching

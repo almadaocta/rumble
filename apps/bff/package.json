@@ -12,6 +12,7 @@
     "db:seed": "tsx src/scripts/seed.ts",
     "db:reset": "tsx src/scripts/reset.ts",
     "db:backfill-bests": "tsx src/scripts/backfill-bests.ts",
+    "verify:cache": "tsx src/scripts/verify-cache.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/"
   },
