@@ -43,8 +43,11 @@ flowchart TD
     User(["🚴 Athlete"]) --> FE["React 19 frontend<br/><i>dashboard + assistant-ui chat</i>"]
     FE <-->|SSE| BFF["Express BFF"]
 
-    BFF -->|"Haiku forced tool call:\nmeal log or weight log?"| FastPath["⚡ Fast path<br/><i>Haiku · classify + extract<br/>single call · ≤512 tokens</i>"]
-    BFF -->|"not fast-path<br/>(or any failure)"| Orch["🧠 Orchestrator<br/><i>Claude Opus</i>"]
+    BFF --> MealTry["⚡ Haiku forced tool call<br/><i>classify_meal_log · ≤512 tokens</i>"]
+    MealTry -->|"is_meal_log: true"| FastPath["Fast path reply<br/><i>write + confirm, skip Opus</i>"]
+    MealTry -->|"false / any failure"| WeightTry["⚡ Haiku forced tool call<br/><i>classify_weight_log · ≤256 tokens</i>"]
+    WeightTry -->|"is_weight_log: true"| FastPath
+    WeightTry -->|"false / any failure"| Orch["🧠 Orchestrator<br/><i>Claude Opus</i>"]
 
     Orch -->|15 tools| Tools["Tools<br/><i>training data · plans · profile<br/>nutrition · device push</i>"]
     Orch -->|consult_specialist| Spec["Specialists<br/><i>Claude Haiku ×4</i>"]
@@ -62,7 +65,7 @@ flowchart TD
 
     classDef model fill:#2d3f5e,stroke:#5b7db1,color:#fff
     classDef store fill:#3d3a2a,stroke:#8a7f4a,color:#fff
-    class Orch,Spec,FastPath model
+    class Orch,Spec,FastPath,MealTry,WeightTry model
     class DB,KB store
     style local fill:none,stroke:#8b949e,stroke-dasharray:5 5
 ```
