@@ -2,8 +2,6 @@
 
 **A personal AI cycling coach grounded in your actual data.** Connects to your training history, fitness metrics, and nutrition logs — then answers coaching questions with real context instead of generic advice.
 
-Built on Claude with a multi-specialist orchestration architecture. Runs entirely on your own machine — bring your own [Anthropic API key](https://console.anthropic.com). No server to run beyond your own laptop, no account, no hosted service, no vector database.
-
 ## Why I built this
 
 I'm a cyclist. The data already exists (power, heart rate, nutrition, training load) but nothing reasons across all of it at once. Talking to Claude about training is useful only if you paste in the numbers yourself. Memory features help with continuity, but they summarize into prose. They don't preserve that your FTP is 285w, that your TSB is -22, or that you've done four Zone 2 rides in a row. Precision gets lost exactly where it matters most.
