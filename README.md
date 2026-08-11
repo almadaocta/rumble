@@ -112,7 +112,7 @@ The measurement that killed it: **the largest specialist library is ~14,000 toke
 | | Retrieval (before) | Whole library (now) |
 | --- | --- | --- |
 | Can miss relevant content | Yes — no relevance floor, fixed `k` | No |
-| Moving parts | Embedder, vector search, `kb_chunks` table, re-embed step | Read files at startup |
+| Moving parts | Embedder, vector search, dedicated chunk table, re-embed step | Read files at startup |
 | Cost per consult | ~$0.0015 | ~$0.0014 cached · ~$0.014 cold |
 | Editing a document | Edit → re-run the embed pipeline | Edit → restart |
 

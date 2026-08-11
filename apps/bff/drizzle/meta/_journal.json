@@ -12,21 +12,21 @@
     {
       "idx": 1,
       "version": "6",
-      "when": 1753920000000,
+      "when": 1784991394646,
       "tag": "0001_drop_kb_chunks",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "6",
-      "when": 1753920000001,
+      "when": 1784991394647,
       "tag": "0002_calorie_adjustment",
       "breakpoints": true
     },
     {
       "idx": 3,
       "version": "6",
-      "when": 1753920000002,
+      "when": 1784991394648,
       "tag": "0003_weight_logs",
       "breakpoints": true
     }
