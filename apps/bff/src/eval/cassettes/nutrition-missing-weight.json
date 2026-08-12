@@ -1,0 +1,40 @@
+{
+  "fixture": "nutrition-missing-weight",
+  "recordedAt": "2026-08-12T07:27:08.612Z",
+  "athleteId": "0d67dede-3b54-491a-a962-1ce679e64796",
+  "rounds": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "I need to give the nutritionist your weight to get an exact gram target — that's a required input, and \"exact protein in grams\" is meaningless without it. Let me grab that one value and dispatch."
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_01TjCXyctm8koKw3ZAnmCrYz",
+          "name": "get_body_metrics",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "textDeltas": [
+        "I need to give the nutritionist your weight to get an exact gram target — that's a required input, and \"exact protein in grams\" is meaningless without it. Let me grab that one value and dispatch."
+      ]
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Your weight isn't on file — and there's no way to give an *exact* protein target in grams without it, since it's calculated per kg of bodyweight. So I can't skip this one.\n\nWhat do you weigh (kg)? Drop me that number and I'll get you a precise gram target from the nutritionist right away. In the meantime, the ballpark for muscle recovery from strength training is 1.6–2.2 g/kg/day — so if you're, say, 75 kg, that's roughly 120–165 g/day. Give me the actual number and I'll get you the specific figure."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "textDeltas": [
+        "Your weight isn't on file — and there's no way to give an *exact* protein target in grams without it, since it's calculated per kg of bodyweight. So I can't skip this one.\n\nWhat do you weigh (kg)? Drop me that number and I'll get you a precise gram target from the nutritionist right away. In the meantime, the ballpark for muscle recovery from strength training is 1.6–2.2 g/kg/day — so if you're, say, 75 kg, that's roughly 120–165 g/day. Give me the actual number and I'll get you the specific figure."
+      ]
+    }
+  ]
+}

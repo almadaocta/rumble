@@ -166,9 +166,25 @@ export const SPECIALIST_PRIORITY_TIER: Record<Specialist, number> = {
   strength_conditioning: 3,
 };
 
-/** The higher-priority (lower tier) of two conflicting specialists. Ties resolve to `a` — the two tier-3 domains never need arbitrating against each other by this rule. */
-export function higherPrioritySpecialist(a: Specialist, b: Specialist): Specialist {
-  return SPECIALIST_PRIORITY_TIER[a] <= SPECIALIST_PRIORITY_TIER[b] ? a : b;
+/**
+ * The higher-priority (lower tier) of two conflicting specialists, or `null`
+ * on a genuine tie (nutritionist vs strength_conditioning today).
+ *
+ * A tie was originally resolved to `a` — arbitrary, since `a`/`b` are just
+ * whichever order the arbitration classifier happened to name the domains
+ * in. A recorded eval fixture (creatine timing, nutritionist vs
+ * strength_conditioning) caught the real consequence: the classifier's own
+ * `reason` text argued for strength_conditioning while the forced pick was
+ * nutritionist, so the athlete would have read a "we went with X" notice
+ * whose stated reason argued for the domain that lost. There is no
+ * principled winner between two equal-tier domains — returning `null` here
+ * is what stops arbitrate-specialists.ts from manufacturing one.
+ */
+export function higherPrioritySpecialist(a: Specialist, b: Specialist): Specialist | null {
+  const tierA = SPECIALIST_PRIORITY_TIER[a];
+  const tierB = SPECIALIST_PRIORITY_TIER[b];
+  if (tierA === tierB) return null;
+  return tierA < tierB ? a : b;
 }
 
 /**

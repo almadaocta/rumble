@@ -28,11 +28,22 @@ export interface CassetteRound {
   textDeltas?: string[];
 }
 
+/** A resolved contradiction, as arbitrate-specialists.ts returns it — recorded verbatim when a taped round actually triggers arbitration. See record-tape.ts. */
+export interface CassetteArbitration {
+  domainA: string;
+  domainB: string;
+  issue: string;
+  chosenDomain: string;
+  reason: string;
+}
+
 export interface Cassette {
   fixture: string;
   recordedAt: string;
   athleteId: string;
   rounds: CassetteRound[];
+  /** Only present if a round actually consulted >1 specialist and arbitration ran. */
+  arbitration?: CassetteArbitration[];
 }
 
 export interface ActualCall {

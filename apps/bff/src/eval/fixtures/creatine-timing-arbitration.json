@@ -1,0 +1,11 @@
+{
+  "name": "creatine-timing-arbitration",
+  "prompt": "I've got two separate questions for my coaching team: (1) nutrition-wise, does creatine timing around my long rides actually matter, or is daily consistency all that counts? (2) strength-wise, I'm in a hypertrophy block right now — does creatine dosing need to change while I'm lifting heavier, and could bad timing hurt my lifting recovery?",
+  "_provenance": "Two prior prompt attempts (plain 'should I take creatine before or after long rides' and a concurrent-training-framed version) got answered from general knowledge or routed to a single specialist — Opus correctly judged them answerable without a specialist consult per orchestrator.md's own guidance. This explicitly two-part, two-specialist-shaped prompt is what actually triggers a same-round dual consult. The real run also pulled get_athlete_context first, which the original guess missed. Recorded 2026-08-12 against the fixed arbitration code (see model-config.ts's higherPrioritySpecialist docstring for the tie-break bug this fixture caught on its first real run, before the fix).",
+  "expected_trace": [
+    { "tool": "get_athlete_context" },
+    { "tool": "consult_specialist", "args_match": { "specialist": "nutritionist" } },
+    { "tool": "consult_specialist", "args_match": { "specialist": "strength_conditioning" } }
+  ],
+  "must_not_call": ["update_training_plan", "update_athlete_profile", "update_ftp_and_zones"]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "nutrition-missing-weight",
+  "prompt": "Don't bother pulling up my file or checking anything first — just ask the nutritionist directly for an exact daily protein target in grams to support muscle recovery from strength training.",
+  "_provenance": "This fixture set out to exercise consult_specialist's validation-error retry loop (a new athlete missing weight_kg, orchestrator attempts a nutritionist consult, gets a named-field error, retries). Five real recordings across two approaches (a blank-seeded athlete, and this prompt explicitly discouraging a pre-check) never produced that trace: the orchestrator consistently checks get_athlete_context/get_body_metrics first, confirms weight is missing, and asks the athlete directly rather than attempting a consult it can already tell would fail — the same tool-description discoverability that generates the validation error (describeSpecialistContracts()) also lets a well-behaved model avoid triggering it. The retry mechanism itself is still covered by consult-specialist.test.ts's unit tests (mocked, deterministic); this fixture instead pins the real, observed, and arguably better behavior: don't fabricate a number, don't attempt a doomed call, ask for the missing input directly. Recorded 2026-08-12 against a fresh blank-seeded athlete (data/eval-missing-weight.db, migrated + seed.ts, never the live DB).",
+  "expected_trace": [
+    { "tool": "get_body_metrics" }
+  ],
+  "must_not_call": ["consult_specialist", "update_athlete_profile", "update_training_plan", "update_ftp_and_zones"]
+}

@@ -177,6 +177,8 @@ The orchestrator can consult more than one specialist in a round — a training-
 
 The fix doesn't ask specialists to negotiate with each other — that's a fake protocol dressed as a real one. It makes the orchestrator's synthesis step explicit instead of emergent: when two or more specialists are consulted in the *same* round (the shape of "couldn't decide which was authoritative," not two independent reads consulted turns apart as sequential inputs to a plan), a cheap forced-tool Haiku call (`arbitrate-specialists.ts`) checks their answers for a genuine contradiction — not different emphasis, a real conflict. Detecting a contradiction and phrasing why it matters both need judgment, so that's the model's job. Which domain wins does not: `higherPrioritySpecialist()` is a two-line, hard-coded lookup (`recovery > cycling_coach > {nutritionist, strength_conditioning}`), never trusted from the model's own output — the guarantee that arbitration is *deterministic* is literal, not just described.
 
+Nutritionist and strength_conditioning are equal priority — a real tie, not a rounding error in the tier numbers. The first recorded eval fixture caught what that meant in practice: `higherPrioritySpecialist()` originally defaulted a tie to whichever domain the classifier named first, and the classifier's own `reason` text argued for the *other* domain — a fake winner with an incongruent justification. It now returns `null` on a genuine tie: no contradiction-notice card is shown (there's no winner to put on it), and the orchestrator is told to weigh the tradeoff itself, with the full conversation context arbitration never sees.
+
 The resolution rides into the orchestrator's next round as an extra context block, not a fake `tool_result` (Claude requires every one of those to match a real `tool_use` id from that round), and `orchestrator.md` tells the model to defer to a flagged contradiction and cite it rather than re-litigate the specialists itself. The athlete sees a short, separate notice — which domains disagreed and which one the app went with — never the full priority reasoning. Fails open at every step: a contradiction the classifier can't parse, or an API error, just means the orchestrator synthesizes exactly as it always did.
 
 ---
@@ -242,7 +244,13 @@ A golden-trace fixture (`apps/bff/src/eval/fixtures/`) names the expected tool s
 
 What this can't do: catch the model getting worse, or an `orchestrator.md` edit changing behavior — the response is frozen at record time. That's why re-taping is a manual step (rerun `record-tape.ts` against the live API), not something CI does automatically.
 
-One fixture exists today (`race-readiness`) — a proof of shape, not a suite — and it already earned its keep once. The first hand-guessed golden trace assumed the orchestrator would pull raw training data and consult the recovery specialist for a readiness question. The recorded run did neither: it answered well from `get_athlete_context` alone, which already carries CTL/ATL/TSB and the athlete's own saved coaching notes. The fixture was rewritten to match the observed-good behavior, not the original guess — see the `_provenance` note in `fixtures/race-readiness.json`.
+Three fixtures exist today — a proof of shape, not a suite — and each caught something real rather than just confirming a guess:
+
+- **`race-readiness`** — the first hand-guessed golden trace assumed the orchestrator would pull raw training data and consult the recovery specialist. The recorded run did neither: it answered well from `get_athlete_context` alone, which already carries CTL/ATL/TSB and the athlete's own saved coaching notes.
+- **`creatine-timing-arbitration`** — built to exercise arbitration end-to-end (two specialists consulted in one round, a real contradiction, the tie-break path). It did: the first live recording caught the tie-break bug described above, before it shipped.
+- **`nutrition-missing-weight`** — set out to catch `consult_specialist`'s validation-error retry loop live. It never fired, across five recordings: the orchestrator consistently checks for missing context and asks the athlete directly rather than attempting a consult it can already tell would fail, from the same tool description that would have produced the error. A different, and arguably better, finding than the one hypothesized.
+
+Each fixture's `_provenance` field in `fixtures/*.json` has the full story of what was guessed versus what was actually recorded.
 
 ---
 

@@ -52,17 +52,27 @@ describe('higherPrioritySpecialist — the priority hierarchy itself', () => {
     expect(higherPrioritySpecialist('cycling_coach', 'recovery')).toBe('recovery');
     expect(higherPrioritySpecialist('recovery', 'cycling_coach')).toBe('recovery');
   });
+
+  it('returns null on a genuine tie — nutritionist and strength_conditioning are equal priority', () => {
+    // Regression case: this used to resolve to `a`, which is arbitrary
+    // (whichever order the arbitration classifier happened to name the
+    // domains in) — a recorded eval fixture caught the classifier's own
+    // `reason` text arguing for the domain that *didn't* win. Returning
+    // null is what stops a fake winner from being manufactured.
+    expect(higherPrioritySpecialist('nutritionist', 'strength_conditioning')).toBeNull();
+    expect(higherPrioritySpecialist('strength_conditioning', 'nutritionist')).toBeNull();
+  });
 });
 
 describe('arbitrateSpecialists', () => {
-  it('resolves a detected contradiction via the hard-coded tier, not whatever the model said', async () => {
+  it('resolves a tier-mismatched contradiction via the hard-coded tier, not whatever the model said', async () => {
     chatMock.mockResolvedValue(
       detectorSaid([
         {
           domain_a: 'strength_conditioning',
-          domain_b: 'nutritionist',
-          issue: 'Timing advice for creatine conflicts.',
-          reason: 'Consistency matters more than timing, so the flexible answer applies.',
+          domain_b: 'recovery',
+          issue: 'Load recommendation conflicts with a recovery flag.',
+          reason: 'Recovery takes priority here given the overreach signal.',
         },
       ]),
     );
@@ -70,15 +80,30 @@ describe('arbitrateSpecialists', () => {
     const resolved = await arbitrateSpecialists(CONSULTS);
 
     expect(resolved).toHaveLength(1);
-    // Neither domain here outranks the other (both tier 3) — higherPrioritySpecialist
-    // resolves ties to its first argument, so the module's own domain_a/domain_b order
-    // (as returned by the model) is what determines it, not a coin flip.
-    expect(resolved[0].chosenDomain).toBe(
-      higherPrioritySpecialist('strength_conditioning', 'nutritionist'),
+    expect(resolved[0].chosenDomain).toBe('recovery');
+    expect(resolved[0].domainA).toBe('strength_conditioning');
+    expect(resolved[0].domainB).toBe('recovery');
+    expect(resolved[0].reason).toContain('Recovery takes priority');
+  });
+
+  it('leaves chosenDomain null on a genuine tie, without discarding the contradiction', async () => {
+    chatMock.mockResolvedValue(
+      detectorSaid([
+        {
+          domain_a: 'strength_conditioning',
+          domain_b: 'nutritionist',
+          issue: 'Timing advice for creatine conflicts.',
+          reason: 'These two domains are equal priority — no fixed winner, worth weighing yourself.',
+        },
+      ]),
     );
+
+    const resolved = await arbitrateSpecialists(CONSULTS);
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].chosenDomain).toBeNull();
     expect(resolved[0].domainA).toBe('strength_conditioning');
     expect(resolved[0].domainB).toBe('nutritionist');
-    expect(resolved[0].reason).toContain('Consistency');
   });
 
   it('lets recovery win over an optimization domain regardless of the order the model names them', async () => {

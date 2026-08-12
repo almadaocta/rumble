@@ -342,4 +342,36 @@ describe('pipeStreamWithToolExecution — specialist arbitration', () => {
     const toolResultMsg = round2Messages.at(-1);
     expect(toolResultMsg.content).toHaveLength(2);
   });
+
+  it('injects a note but emits no frame on a genuine tie (chosenDomain null)', async () => {
+    // nutritionist vs strength_conditioning are equal priority — there's no
+    // winner to put on an athlete-facing card, but Opus still needs to know
+    // a real contradiction exists so it can weigh it itself next round.
+    arbitrateSpecialistsMock.mockResolvedValueOnce([
+      {
+        domainA: 'strength_conditioning',
+        domainB: 'nutritionist',
+        issue: 'Dosing advice conflicts.',
+        chosenDomain: null,
+        reason: 'Equal priority — worth weighing based on which matters more right now.',
+      },
+    ]);
+    chatStreamMock.mockReturnValueOnce(twoSpecialistToolUse()).mockReturnValueOnce(textDecision('done'));
+    executeToolCallsMock.mockResolvedValueOnce(TWO_SPECIALIST_RESULTS);
+
+    const res = createMockRes();
+    await pipeStreamWithToolExecution(res, baseCtx);
+
+    const written = (res.write as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .map((c) => String(c[0]))
+      .join('');
+    expect(written).not.toContain('contradiction-notice');
+
+    const round2Messages = chatStreamMock.mock.calls[1][0].messages;
+    const toolResultMsg = round2Messages.at(-1);
+    expect(toolResultMsg.content).toHaveLength(3);
+    const noteBlock = toolResultMsg.content.at(-1);
+    expect(noteBlock.text).toContain('equal priority');
+    expect(noteBlock.text).toContain('Weigh it yourself');
+  });
 });

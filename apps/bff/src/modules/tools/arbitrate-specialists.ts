@@ -18,9 +18,12 @@ const DETECT_CONTRADICTIONS_TOOL = {
     'that cannot both be followed at once, not just different emphasis or complementary advice on different ' +
     'aspects of the question. Be conservative: most multi-specialist answers agree or complement each other, ' +
     'and an empty list is the right answer most of the time. For each real contradiction, name the two domains ' +
-    "involved, the conflicting claim in one sentence, and — given Rumble's fixed priority when specialists " +
-    'conflict (recovery > cycling_coach > nutritionist/strength_conditioning) — a one-sentence, athlete-facing ' +
-    "reason the higher-priority domain's view applies here specifically (not a restatement of the abstract ranking).",
+    "involved and the conflicting claim in one sentence. Then write a one-sentence, athlete-facing reason: " +
+    "Rumble's fixed priority is recovery > cycling_coach > nutritionist/strength_conditioning, but nutritionist " +
+    "and strength_conditioning are EQUAL priority — neither outranks the other. If one domain in this pair " +
+    "outranks the other, explain why that domain's view applies here specifically. If the pair is exactly " +
+    "nutritionist vs strength_conditioning, do NOT declare a winner or argue for one side — describe the " +
+    'tradeoff instead, so the athlete (or the coach synthesizing this) can weigh it themselves.',
   input_schema: {
     type: 'object' as const,
     properties: {
@@ -70,8 +73,8 @@ export interface ResolvedContradiction {
   domainA: Specialist;
   domainB: Specialist;
   issue: string;
-  /** Computed by higherPrioritySpecialist, not read from the model's output. */
-  chosenDomain: Specialist;
+  /** Computed by higherPrioritySpecialist, not read from the model's output. `null` on a genuine tie (nutritionist vs strength_conditioning) — there is no principled winner to name. */
+  chosenDomain: Specialist | null;
   reason: string;
 }
 

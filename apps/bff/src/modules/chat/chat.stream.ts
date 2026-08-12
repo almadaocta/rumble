@@ -132,9 +132,13 @@ function toolLabel(name: string, args?: Record<string, unknown>): string {
 // specialists itself. Not sent to the athlete; contradiction-notice frames
 // carry the short, athlete-facing version of the same resolution.
 function arbitrationNoteText(resolved: ResolvedContradiction[]): string {
-  const lines = resolved.map(
-    (c) =>
-      `- ${c.domainA} vs ${c.domainB}: ${c.issue} — defer to ${c.chosenDomain} per Rumble's fixed priority (${c.reason})`,
+  const lines = resolved.map((c) =>
+    c.chosenDomain
+      ? `- ${c.domainA} vs ${c.domainB}: ${c.issue} — defer to ${c.chosenDomain} per Rumble's fixed priority (${c.reason})`
+      // Equal-priority domains (nutritionist vs strength_conditioning today) —
+      // no fixed winner to defer to. Opus makes this call itself, with the
+      // full conversation context arbitrate-specialists.ts never sees.
+      : `- ${c.domainA} vs ${c.domainB}: ${c.issue} — equal priority, no fixed winner. ${c.reason} Weigh it yourself and say which way you're leaning and why.`,
   );
   return [
     `Arbitration note — ${resolved.length} contradiction(s) found between this round's specialists:`,
@@ -303,8 +307,11 @@ export async function pipeStreamWithToolExecution(
         );
         // One line, matching every other sse() call in this file — sse-frame.test.ts
         // scans for `sse(res, { type: '...'` on a single line to confirm every frame
-        // this file emits is declared in the SseFrame union.
+        // this file emits is declared in the SseFrame union. Skipped on a genuine
+        // tie (chosenDomain null) — there's no winner to name on the card, and
+        // Opus's own answer (grounded by arbitrationNote above) carries the nuance.
         for (const c of resolved) {
+          if (!c.chosenDomain) continue;
           sse(res, { type: 'contradiction-notice', domains: [c.domainA, c.domainB], chosenDomain: c.chosenDomain, oneLineReason: c.reason });
         }
         if (resolved.length > 0) arbitrationNote = arbitrationNoteText(resolved);
