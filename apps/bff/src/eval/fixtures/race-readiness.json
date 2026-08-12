@@ -1,0 +1,9 @@
+{
+  "name": "race-readiness",
+  "prompt": "Am I ready to race next month?",
+  "_provenance": "expected_trace was revised after the first real recording (see cassettes/race-readiness.json, recorded 2026-08-11): the original guess required get_training_data and a recovery consult, but the real run answered well from get_athlete_context alone — its detailed context already carries CTL/ATL/TSB, recent activities, the target event, and saved coaching notes (pacing plan, FTP-retest flag), which covered this question without needing raw activity data or specialist grounding. Pinned to that observed-good behavior rather than a blind guess.",
+  "expected_trace": [
+    { "tool": "get_athlete_context" }
+  ],
+  "must_not_call": ["update_training_plan", "update_ftp_and_zones", "delete_nutrition_log"]
+}

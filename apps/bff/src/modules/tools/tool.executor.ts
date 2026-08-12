@@ -8,6 +8,7 @@ import {
   type ToolHandler,
   type ToolName,
 } from './tool-registry.js';
+import { formatZodIssues } from './format-zod-error.js';
 
 const log = createLogger('tools');
 
@@ -81,10 +82,7 @@ export async function executeToolCall(toolCall: ToolCall, athleteId: string): Pr
  */
 function toolErrorMessage(err: unknown): string {
   if (err instanceof z.ZodError) {
-    const issues = err.issues
-      .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
-      .join('; ');
-    return `Invalid arguments — ${issues}`;
+    return `Invalid arguments — ${formatZodIssues(err.issues)}`;
   }
   return err instanceof Error ? err.message : 'Tool execution failed';
 }

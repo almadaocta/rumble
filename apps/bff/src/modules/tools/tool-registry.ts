@@ -3,6 +3,8 @@ import { getTrainingData } from './get-training-data.js';
 import { getBodyMetrics } from './get-body-metrics.js';
 import { getNutritionLog } from './get-nutrition-log.js';
 import { logMeal } from './log-meal.js';
+import { updateNutritionLog } from './update-nutrition-log.js';
+import { deleteNutritionLog } from './delete-nutrition-log.js';
 import { logSessionFeedback } from './log-session-feedback.js';
 import { updateTrainingPlan } from './update-training-plan.js';
 import { updateFtpZones } from './update-ftp-and-zones.js';
@@ -19,7 +21,7 @@ import type { ToolDefinition } from '../claude/claude.client.js';
 import type { ToolOutcome } from './tool-result.js';
 import { ACTIVITY_TYPES } from '../activities/normalized-activity.js';
 import { PLAN_INTERVAL_JSON_SCHEMA } from '../plans/plan-interval.js';
-import { SPECIALIST_NAMES } from '../claude/model-config.js';
+import { SPECIALIST_NAMES, describeSpecialistContracts } from '../claude/model-config.js';
 import {
   MEAL_TYPES,
   CONFIDENCE_TIERS,
@@ -100,7 +102,13 @@ export const TOOL_REGISTRY = {
         },
         athlete_context: {
           type: 'object',
-          description: 'Relevant athlete context to pass to the specialist (current metrics, recent activities, etc.)',
+          // Per-specialist required/optional fields, generated from the same
+          // contract consult-specialist.ts validates against — a required
+          // field missing here fails the call there. Listed by specialist
+          // rather than a generic "current metrics, recent activities" blurb
+          // so the model knows what to gather *before* it consults, not
+          // after a rejected call.
+          description: `Athlete context for the chosen specialist — required fields are validated before dispatch and a call missing one fails with the field name. Per specialist: ${describeSpecialistContracts()}`,
         },
       },
       required: ['specialist', 'query'],
@@ -232,6 +240,54 @@ export const TOOL_REGISTRY = {
       required: ['description'],
     },
   },
+  update_nutrition_log: {
+    handler: updateNutritionLog,
+    label: 'Updating nutrition log',
+    description:
+      'Correct a previously logged meal by id (from get_nutrition_log or a log_meal/update_nutrition_log/delete_nutrition_log result). Only pass the fields that changed — everything else is left as-is. Use when the athlete corrects something they logged, or when log_meal reports a duplicate and the right move is to fix the existing entry instead of adding a new one.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'id of the nutrition log to update' },
+        meal_type: {
+          type: 'string',
+          enum: [...MEAL_TYPES],
+          description: 'Type of meal',
+        },
+        description: {
+          type: 'string',
+          description: 'What the athlete ate, as described',
+        },
+        calories: { type: 'number', description: 'Estimated calories' },
+        carbs_g: { type: 'number', description: 'Estimated carbs in grams' },
+        protein_g: { type: 'number', description: 'Estimated protein in grams' },
+        fat_g: { type: 'number', description: 'Estimated fat in grams' },
+        confidence_tier: {
+          type: 'number',
+          enum: [...CONFIDENCE_TIERS],
+          description: 'Accuracy tier: 1=precision (weighed/label), 2=visual (photo), 3=estimate (description)',
+        },
+        date: {
+          type: 'string',
+          description: 'ISO date (YYYY-MM-DD) to move this log to, if it was logged on the wrong day',
+        },
+      },
+      required: ['id'],
+    },
+  },
+  delete_nutrition_log: {
+    handler: deleteNutritionLog,
+    label: 'Deleting nutrition log',
+    description:
+      'Delete a previously logged meal by id (from get_nutrition_log or a log_meal result). Use when the athlete says they logged something by mistake, logged a duplicate, or want an entry removed. Does NOT require confirmation for an obvious duplicate the athlete just pointed out, but confirm before deleting anything else.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'id of the nutrition log to delete' },
+      },
+      required: ['id'],
+    },
+  },
   log_weight: {
     handler: logWeight,
     label: 'Logging weight',
@@ -291,7 +347,7 @@ export const TOOL_REGISTRY = {
     handler: updateTrainingPlan,
     label: 'Updating training plan',
     description:
-      'Create a new training plan, add sessions to an existing plan, or update plan metadata. Always confirm the plan with the athlete before creating. For multi-week plans, do NOT try to write every session in one call — batch add_sessions calls by week (or ~5-10 sessions at a time) across multiple turns. A single call with a large sessions array risks being cut off by the output token limit before the sessions array is even reached, silently dropping it.',
+      'Create a new training plan, add sessions to an existing plan, update plan metadata, or remove sessions. Always confirm the plan with the athlete before creating. For multi-week plans, do NOT try to write every session in one call — batch add_sessions calls by week (or ~5-10 sessions at a time) across multiple turns. A single call with a large sessions array risks being cut off by the output token limit before the sessions array is even reached, silently dropping it. To find the current plan_id and existing session ids, call get_training_data first — its activePlan.id and upcomingSessions[].id are exactly these values. If you spot duplicate, mis-dated, or otherwise wrong sessions, use remove_sessions to delete them (do not just append corrected sessions on top of wrong ones — remove the wrong ones first).',
     input_schema: {
       type: 'object',
       properties: {
@@ -302,7 +358,12 @@ export const TOOL_REGISTRY = {
         },
         plan_id: {
           type: 'string',
-          description: 'UUID of existing plan (for update or add_sessions)',
+          description: 'UUID of existing plan (for update or add_sessions). Get this from get_training_data\'s activePlan.id — never guess or invent one.',
+        },
+        session_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'For remove_sessions: the plan_sessions ids to delete, from get_training_data\'s upcomingSessions[].id.',
         },
         name: { type: 'string', description: 'Plan name' },
         start_date: { type: 'string', description: 'ISO date for plan start' },

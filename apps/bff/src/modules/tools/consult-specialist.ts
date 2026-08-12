@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { chat, systemBlock } from '../claude/claude.client.js';
-import { getSpecialist, isSpecialist, SPECIALIST_NAMES } from '../claude/model-config.js';
+import { getSpecialist, getContextContract, isSpecialist, SPECIALIST_NAMES } from '../claude/model-config.js';
 import type { ToolOutcome } from './tool-result.js';
+import { formatZodIssues } from './format-zod-error.js';
 
 const ConsultArgs = z.object({
   specialist: z.string(),
@@ -22,10 +23,29 @@ export async function consultSpecialist(
     };
   }
 
+  // Validated before the specialist is ever called — a missing required
+  // field (e.g. weight_kg for the nutritionist) fails the tool call with a
+  // named-field error instead of the specialist quietly reasoning without
+  // it, and instead of spending a Haiku call on a consult that was always
+  // going to be under-informed. Unknown keys the orchestrator threw in are
+  // stripped by the schema, not passed through — the specialist should only
+  // ever see the context its own contract asked for.
+  const contract = getContextContract(specialist);
+  const parsedContext = contract.safeParse(athlete_context ?? {});
+  if (!parsedContext.success) {
+    return {
+      ok: false,
+      specialist,
+      error:
+        `${specialist} needs more context — ${formatZodIssues(parsedContext.error.issues)}. ` +
+        'Fetch the missing data (e.g. get_athlete_context) and call consult_specialist again with it in athlete_context.',
+    };
+  }
+
   const config = getSpecialist(specialist);
 
   const MAX_CONTEXT_CHARS = 2000;
-  let contextStr = athlete_context ? JSON.stringify(athlete_context) : '';
+  let contextStr = JSON.stringify(parsedContext.data);
   if (contextStr.length > MAX_CONTEXT_CHARS) {
     contextStr = contextStr.slice(0, MAX_CONTEXT_CHARS) + '... [truncated]';
   }
@@ -59,22 +79,4 @@ export async function consultSpecialist(
     specialist,
     response: content,
   };
-}
-
-/**
- * One-line preview of a consult, for the reasoning stream in chat.stream.ts.
- *
- * Lives here because this module owns the result shape. Reaching into the
- * result from chat.stream.ts instead would mean plucking `.response` off an
- * `unknown` by name — renaming that field degrades the UI to no preview at all
- * and fails nowhere.
- */
-export function summarizeConsult(result: unknown): string | null {
-  if (!result || typeof result !== 'object') return null;
-  const { response } = result as { response?: unknown };
-  if (typeof response !== 'string') return null;
-
-  const firstLine = response.split('\n').find((line) => line.trim().length > 10)?.trim();
-  if (!firstLine) return null;
-  return firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine;
 }

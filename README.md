@@ -49,7 +49,7 @@ flowchart TD
     WeightTry -->|"is_weight_log: true"| FastPath
     WeightTry -->|"false / any failure"| Orch["🧠 Orchestrator<br/><i>Claude Opus</i>"]
 
-    Orch -->|15 tools| Tools["Tools<br/><i>training data · plans · profile<br/>nutrition · device push</i>"]
+    Orch -->|19 tools| Tools["Tools<br/><i>training data · plans · profile<br/>nutrition · device push</i>"]
     Orch -->|consult_specialist| Spec["Specialists<br/><i>Claude Haiku ×4</i>"]
     Spec --> KB[["📚 Knowledge base<br/><i>29 cited documents,<br/>one library per specialist</i>"]]
 
@@ -83,7 +83,7 @@ sequenceDiagram
     participant S as Recovery specialist (Haiku)
 
     A->>B: "Am I ready to race in 3 weeks?"
-    B->>O: conversation + 15 tool schemas
+    B->>O: conversation + 19 tool schemas
     Note over O: system prompt & tool schemas<br/>cached separately from per-turn context
 
     O->>T: get_training_data · get_athlete_context
@@ -101,7 +101,7 @@ sequenceDiagram
 
 ---
 
-## Three decisions worth defending
+## Decisions worth defending
 
 ### 1. No vector database
 
@@ -122,7 +122,7 @@ Deleting it removed two modules, a build step, a database table, and a 48-packag
 
 ### 2. Prompt caching
 
-The orchestrator's system prompt and all 15 tool schemas are static, so they're marked cache-eligible and sit ahead of the per-turn context. Specialists do the same with persona + library.
+The orchestrator's system prompt and all 19 tool schemas are static, so they're marked cache-eligible and sit ahead of the per-turn context. Specialists do the same with persona + library.
 
 Caching is a **prefix match**: one changed byte invalidates everything after it. The fix is ordering — freeze the prefix, and put anything that varies after the last cache breakpoint.
 
@@ -142,6 +142,22 @@ The model writes structured coaching notes (`save_coaching_note`) as facts come 
 
 The user's own message is persisted the instant the request is received, too — not batched with the (possibly multi-round, multi-tool-call) reply. A page refresh mid-generation shows what was actually sent instead of reverting to the chat's state before that turn.
 
+### 5. Typed context per specialist, not a free-form blob
+
+`consult_specialist`'s `athlete_context` used to be `{ type: 'object' }` — the orchestrator decided what to put in it, with nothing structural stopping it from forgetting a field the specialist actually needed (a nutrition question dispatched without the athlete's weight, say).
+
+The fix isn't validation bolted on top of the blob — that just moves the same failure to a generic error later. It's inverting who declares what's needed: each specialist owns a small zod contract (`SPECIALIST_CONTEXT_CONTRACTS` in `model-config.ts`) naming its own required and optional fields. `consult_specialist` validates `athlete_context` against the chosen specialist's contract *before* the Haiku call — a missing required field fails with the field named, at zero API cost, and the orchestrator can self-correct next round the same way it already does for a malformed tool argument elsewhere in the app.
+
+The same contract generates the tool's own description (`describeSpecialistContracts()`), so the orchestrator sees what each specialist needs before it's rejected for skipping it, not just after.
+
+### 6. Arbitration when specialists disagree, not silent synthesis
+
+The orchestrator can consult more than one specialist in a round — a training-and-nutrition question, say — and nothing stopped it from just picking one specialist's view in its own synthesis, silently, with no record of what it discarded or why.
+
+The fix doesn't ask specialists to negotiate with each other — that's a fake protocol dressed as a real one. It makes the orchestrator's synthesis step explicit instead of emergent: when two or more specialists are consulted in the *same* round (the shape of "couldn't decide which was authoritative," not two independent reads consulted turns apart as sequential inputs to a plan), a cheap forced-tool Haiku call (`arbitrate-specialists.ts`) checks their answers for a genuine contradiction — not different emphasis, a real conflict. Detecting a contradiction and phrasing why it matters both need judgment, so that's the model's job. Which domain wins does not: `higherPrioritySpecialist()` is a two-line, hard-coded lookup (`recovery > cycling_coach > {nutritionist, strength_conditioning}`), never trusted from the model's own output — the guarantee that arbitration is *deterministic* is literal, not just described.
+
+The resolution rides into the orchestrator's next round as an extra context block, not a fake `tool_result` (Claude requires every one of those to match a real `tool_use` id from that round), and `orchestrator.md` tells the model to defer to a flagged contradiction and cite it rather than re-litigate the specialists itself. The athlete sees a short, separate notice — which domains disagreed and which one the app went with — never the full priority reasoning. Fails open at every step: a contradiction the classifier can't parse, or an API error, just means the orchestrator synthesizes exactly as it always did.
+
 ---
 
 ## Token budget
@@ -153,7 +169,7 @@ Every API call to Claude carries three categories of tokens: **cached** (paid on
 | Input | Cache strategy | ~Tokens |
 | --- | --- | --- |
 | Orchestrator system prompt (`prompts/orchestrator.md`) | Ephemeral prefix — first block sent to Claude, byte-identical every call | ~503 |
-| All 15 tool schemas | Ephemeral on last tool in array — caches the whole block | ~3,200 |
+| All 19 tool schemas | Ephemeral on last tool in array — caches the whole block | ~3,200 |
 | Specialist persona + full KB | Ephemeral prefix — memoised at startup, sorted deterministically | ~9k–14k |
 
 Caching is a prefix match (see "Prompt caching" above for why). In practice: the slim preamble, which carries a live timestamp, is a separate block placed *after* the cached system prompt — so it never invalidates the cache ahead of it.
@@ -194,6 +210,18 @@ The raw per-second streams (3,600–18,000+ numbers for a 1–5 hr ride) are nev
 | **Strength & conditioning** | 6 | ~9.1k tok | Rønnestad & Mujika · Wilson concurrent-training meta-analysis · Olmedillas cycling bone health |
 
 Each document ends with a `## Sources` block containing full citations. Adding one is: drop a `.md` file in the right folder, restart.
+
+---
+
+## Evaluating tool selection
+
+Non-deterministic output makes the orchestrator's tool choices hard to regression-test the normal way — the same prompt can produce two reasonable-but-different answers. What's checkable is the *trace*: which tools got called, in what order, with what arguments. The response text is noise for this; the tool trace is the signal.
+
+A golden-trace fixture (`apps/bff/src/eval/fixtures/`) names the expected tool sequence for a prompt; a scorer (`score-trace.ts`) checks it as an ordered subsequence — extra, unlisted calls don't fail a fixture, but the calls it does list must happen in that relative order, with matching arguments. `record-tape.ts` runs the real orchestrator against the live API once and freezes the result to a cassette (`apps/bff/src/eval/cassettes/`, never against `data/rumble.db` directly — it records against a copy, so a run can't write into anyone's real coaching history to produce a test fixture). `eval-*.test.ts` then replays that cassette deterministically — no API cost, no live-model dependency — through the real orchestration loop, so CI also catches a regression in the *harness* (round budget, message assembly) and not only in the recorded trace.
+
+What this can't do: catch the model getting worse, or an `orchestrator.md` edit changing behavior — the response is frozen at record time. That's why re-taping is a manual step (rerun `record-tape.ts` against the live API), not something CI does automatically.
+
+One fixture exists today (`race-readiness`) — a proof of shape, not a suite — and it already earned its keep once. The first hand-guessed golden trace assumed the orchestrator would pull raw training data and consult the recovery specialist for a readiness question. The recorded run did neither: it answered well from `get_athlete_context` alone, which already carries CTL/ATL/TSB and the athlete's own saved coaching notes. The fixture was rewritten to match the observed-good behavior, not the original guess — see the `_provenance` note in `fixtures/race-readiness.json`.
 
 ---
 
@@ -249,3 +277,4 @@ Being honest about the edges, because a portfolio piece that claims to be finish
 - **The compiled path gets less exercise than `pnpm dev`.** `pnpm build` now copies the prompt `.md` files into `dist/` (`tsc` alone doesn't), and the built module has been verified to load its prompts and resolve the knowledge base — but day-to-day development runs from source via `tsx`, so the compiled path isn't covered by CI.
 - **`getDefaultAthleteId()` has no ordering guarantee.** It's `SELECT ... LIMIT 1` with no `ORDER BY`, on the assumption that exactly one `athletes` row exists — true until something violates it (e.g. a seed script run against the wrong `DATABASE_PATH`, which silently targets a second SQLite file instead of erroring). If a second row ever appears, which one "the athlete" resolves to is undefined, and chats/notes tied to the other row become invisible rather than merged. Fine for a single-tenant local app; the fix is either an explicit invariant check at startup or making this the first thing real auth replaces.
 - **A stale `chatId` retries instead of recovering.** The web client caches the active chat's id in `localStorage`; if the server 404s it (chat deleted, or owned by a different athlete row per the point above), `chat-runtime.ts` throws but never clears the cached id — every subsequent message retries the same dead id and 404s again. Should clear the id and start a fresh chat on a 404 instead.
+- **A contradiction-notice doesn't survive a page reload.** It's carried as a plain text block inside the persisted `tool_result` message — not a shape `loadInitialMessages`'s reconstruction logic knows to look for (it only replays `consult_specialist` results into messages). Live streaming shows it; reopening the chat later doesn't. Same category of gap as the point above — a real follow-up, not a hidden one.

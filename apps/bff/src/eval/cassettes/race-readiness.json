@@ -1,0 +1,40 @@
+{
+  "fixture": "race-readiness",
+  "recordedAt": "2026-08-11T17:38:16.690Z",
+  "athleteId": "2d890e0b-607e-409e-bf92-a61e72b83b3f",
+  "rounds": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Let me pull your current fitness picture and see what you're actually racing next month."
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_01LTP4PSrWuFUWMZyRXHAfsN",
+          "name": "get_athlete_context",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "textDeltas": [
+        "Let me pull your current fitness picture and see what you're actually racing next month."
+      ]
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Short answer: fitness-wise you're in decent shape and there's still time to sharpen — but there are two things I want to flag honestly. Girona is **31 days out (Sep 12)**.\n\n**Where your fitness actually sits:**\n- **CTL 53.6, ATL 55.9, TSB -2.3** — you're neutral, slightly fatigued, but nothing alarming. Good spot to build from.\n- **Ramp rate is -2.4/week** — your fitness is trending *down* slightly right now. Weekly TSS target is 380 and you're at 0 so far this week (it's Tuesday, so that's fine, but the trend matters).\n- CTL in the low 50s for a ~4h gravel race is workable for a puncher like you, especially since the race is only 940m of climbing. It's not a \"peak fitness\" number, but you don't need to be a diesel for this course.\n\n**The two honest flags:**\n\n1. **Your ceiling isn't fitness — it's pacing.** You know this. The whole Girona plan exists because your history says you'll get baited on the front-loaded opening climbs and blow up before the flats where the race is actually won (km 60-90). Being \"ready\" for Girona means executing the plan — first-hour ceiling 195W NP / HR ≤165, let the front selection go on the climbs, save the punch for km 60-90. Your legs are ready. The question is whether your discipline holds in hour one.\n\n2. **The FTP retest is overdue.** Your 290W is still a *working hypothesis* — the Jul 22 test was flawed and we flagged a clean retest for mid-August. That's now. Every pacing number in your plan (195W = 67% of FTP) depends on FTP being right. If it's actually 280, your ceilings shift. **Today's Montjuïc puncher session was meant to be the first calibration read of the new 290W** — how did your legs feel? Flat or firing?\n\nSo: **are you ready?** Physically, yes — with 4 weeks to sharpen. But I want to (a) get a clean FTP retest done this week and (b) make sure the taper/final build is dialed. \n\nWant me to have your coach map out the final 4-week run-in to Girona? And tell me how today's climbs felt — that's data I need."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "textDeltas": [
+        "Short answer: fitness-wise you're in decent shape and there's still time to sharpen — but there are two things I want to flag honestly. Girona is **31 days out (Sep 12)**.\n\n**Where your fitness actually sits:**\n- **CTL 53.6, ATL 55.9, TSB -2.3** — you're neutral, slightly fatigued, but nothing alarming. Good spot to build from.\n- **Ramp rate is -2.4/week** — your fitness is trending *down* slightly right now. Weekly TSS target is 380 and you're at 0 so far this week (it's Tuesday, so that's fine, but the trend matters).\n- CTL in the low 50s for a ~4h gravel race is workable for a puncher like you, especially since the race is only 940m of climbing. It's not a \"peak fitness\" number, but you don't need to be a diesel for this course.\n\n**The two honest flags:**\n\n1. **Your ceiling isn't fitness — it's pacing.** You know this. The whole Girona plan exists because your history says you'll get baited on the front-loaded opening climbs and blow up before the flats where the race is actually won (km 60-90). Being \"ready\" for Girona means executing the plan — first-hour ceiling 195W NP / HR ≤165, let the front selection go on the climbs, save the punch for km 60-90. Your legs are ready. The question is whether your discipline holds in hour one.\n\n2. **The FTP retest is overdue.** Your 290W is still a *working hypothesis* — the Jul 22 test was flawed and we flagged a clean retest for mid-August. That's now. Every pacing number in your plan (195W = 67% of FTP) depends on FTP being right. If it's actually 280, your ceilings shift. **Today's Montjuïc puncher session was meant to be the first calibration read of the new 290W** — how did your legs feel? Flat or firing?\n\nSo: **are you ready?** Physically, yes — with 4 weeks to sharpen. But I want to (a) get a clean FTP retest done this week and (b) make sure the taper/final build is dialed. \n\nWant me to have your coach map out the final 4-week run-in to Girona? And tell me how today's climbs felt — that's data I need."
+      ]
+    }
+  ]
+}

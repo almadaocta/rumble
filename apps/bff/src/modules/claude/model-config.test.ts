@@ -76,6 +76,32 @@ describe('model-config import cost', () => {
     expect(modelConfig.isSpecialist('astrologer')).toBe(false);
     expect(readFileSyncSpy).not.toHaveBeenCalled();
   });
+
+  it('has a context contract for every specialist, without reading anything', () => {
+    for (const name of modelConfig.SPECIALIST_NAMES) {
+      expect(modelConfig.SPECIALIST_CONTEXT_CONTRACTS[name]).toBeDefined();
+    }
+    expect(readFileSyncSpy).not.toHaveBeenCalled();
+    expect(readdirSyncSpy).not.toHaveBeenCalled();
+  });
+
+  it('has a priority tier for every specialist, without reading anything', () => {
+    for (const name of modelConfig.SPECIALIST_NAMES) {
+      expect(typeof modelConfig.SPECIALIST_PRIORITY_TIER[name]).toBe('number');
+    }
+    expect(readFileSyncSpy).not.toHaveBeenCalled();
+  });
+
+  it('describes every specialist by name in the generated contract summary', () => {
+    const description = modelConfig.describeSpecialistContracts();
+    for (const name of modelConfig.SPECIALIST_NAMES) {
+      expect(description).toContain(name);
+    }
+    // A required field renders bare; an optional one is marked with `?` so the
+    // orchestrator can tell which fields a rejected call is actually missing.
+    expect(description).toContain('weight_kg');
+    expect(description).toContain('current_phase?');
+  });
 });
 
 describe('getSpecialist', () => {

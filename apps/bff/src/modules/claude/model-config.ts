@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { z } from 'zod';
+import { TRAINING_PHASES, EXPERIENCE_LEVELS } from '../tools/vocabularies.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROMPTS_DIR = join(__dirname, 'prompts');
@@ -104,6 +106,84 @@ export const SPECIALIST_NAMES = Object.keys(SPECIALIST_SOURCES) as Specialist[];
 
 export function isSpecialist(value: string): value is Specialist {
   return value in SPECIALIST_SOURCES;
+}
+
+/**
+ * What each specialist needs to answer well, declared by the specialist
+ * rather than assembled ad hoc by the orchestrator on every consult.
+ *
+ * consult-specialist.ts validates athlete_context against this before the
+ * specialist is ever called — a missing required field (e.g. weight_kg for
+ * the nutritionist) fails the tool call with a named-field error the
+ * orchestrator can act on, instead of the specialist quietly reasoning
+ * without it. Pure data, like SPECIALIST_SOURCES above: no disk I/O.
+ */
+export const SPECIALIST_CONTEXT_CONTRACTS: Record<Specialist, z.ZodObject<z.ZodRawShape>> = {
+  nutritionist: z.object({
+    weight_kg: z.number(),
+    current_phase: z.enum(TRAINING_PHASES).optional(),
+    daily_calorie_adjustment: z.number().optional(),
+    upcoming_load_tss: z.number().optional(),
+  }),
+  cycling_coach: z.object({
+    ftp_w: z.number(),
+    tsb: z.number().optional(),
+    current_phase: z.enum(TRAINING_PHASES).optional(),
+    weekly_hours_target: z.number().optional(),
+  }),
+  strength_conditioning: z.object({
+    experience_level: z.enum(EXPERIENCE_LEVELS).optional(),
+    current_phase: z.enum(TRAINING_PHASES).optional(),
+    available_hours_week: z.number().optional(),
+  }),
+  recovery: z.object({
+    tsb: z.number(),
+    ctl: z.number().optional(),
+    atl: z.number().optional(),
+  }),
+};
+
+export function getContextContract(vertical: Specialist): z.ZodObject<z.ZodRawShape> {
+  return SPECIALIST_CONTEXT_CONTRACTS[vertical];
+}
+
+/**
+ * Fixed priority when two specialists directly contradict each other on the
+ * same question. Lower number wins. Deliberately not something a model
+ * decides: arbitrate-specialists.ts asks a model to *detect* a contradiction
+ * and *phrase* why it matters — both genuinely need judgment — but which
+ * domain wins is a two-line lookup, and leaving that to a model turns a
+ * guarantee into a probability.
+ *
+ * safety (recovery) > goal-adherence (the athlete's own coach) >
+ * optimization (nutrition, strength — both tier 3, neither outranks the
+ * other; a contradiction between just these two isn't a priority question).
+ */
+export const SPECIALIST_PRIORITY_TIER: Record<Specialist, number> = {
+  recovery: 1,
+  cycling_coach: 2,
+  nutritionist: 3,
+  strength_conditioning: 3,
+};
+
+/** The higher-priority (lower tier) of two conflicting specialists. Ties resolve to `a` — the two tier-3 domains never need arbitrating against each other by this rule. */
+export function higherPrioritySpecialist(a: Specialist, b: Specialist): Specialist {
+  return SPECIALIST_PRIORITY_TIER[a] <= SPECIALIST_PRIORITY_TIER[b] ? a : b;
+}
+
+/**
+ * Per-specialist required/optional field lists, folded into
+ * consult_specialist's cached tool description — the orchestrator sees the
+ * shape it needs to build before it ever gets a validation error back.
+ * Deterministic and disk-free, so it stays byte-identical across calls (the
+ * cached tool block needs that) without needing its own memoisation.
+ */
+export function describeSpecialistContracts(): string {
+  return SPECIALIST_NAMES.map((name) => {
+    const shape = SPECIALIST_CONTEXT_CONTRACTS[name].shape;
+    const fields = Object.entries(shape).map(([key, field]) => (field.isOptional() ? `${key}?` : key));
+    return `${name} {${fields.join(', ')}}`;
+  }).join('; ');
 }
 
 /**

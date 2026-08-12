@@ -12,6 +12,7 @@
  * There is no build-time link between the two packages, so this file is the
  * seam: if a BFF payload changes, this is what has to change with it.
  */
+import type { Specialist } from './specialists';
 
 /** `activities` rows as returned by GET /api/activities. */
 export interface Activity {
@@ -130,6 +131,8 @@ export type SseFrame =
   | { type: 'start-step' }
   | { type: 'text-delta'; delta: string }
   | { type: 'reasoning-delta'; delta: string }
+  | { type: 'specialist-message'; specialist: Specialist; text: string }
+  | { type: 'contradiction-notice'; domains: [Specialist, Specialist]; chosenDomain: Specialist; oneLineReason: string }
   | { type: 'finish-step' }
   | { type: 'finish'; usage?: unknown }
   | { type: 'error'; errorText: string };

@@ -2,6 +2,7 @@ import type { Response as ExpressResponse } from 'express';
 import type { ToolUseBlock, TextBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import { executeToolCalls } from '../tools/tool.executor.js';
 import { TOOL_REGISTRY, type ToolName } from '../tools/tool-registry.js';
+import { arbitrateSpecialists, type ResolvedContradiction } from '../tools/arbitrate-specialists.js';
 import type { SseFrame } from './sse-frame.js';
 import { chatStream, type ChatMessage } from '../claude/claude.client.js';
 import { ORCHESTRATOR_MODEL, orchestratorSystemPrompt, isSpecialist, type Specialist } from '../claude/model-config.js';
@@ -124,6 +125,21 @@ function toolLabel(name: string, args?: Record<string, unknown>): string {
     return SPECIALIST_LABELS[args.specialist as Specialist] || `Consulting ${args.specialist}`;
   }
   return TOOL_REGISTRY[name as ToolName]?.label || `Running ${name}`;
+}
+
+// What Opus reads before its next round when arbitration flagged something —
+// orchestrator.md tells it to defer to this rather than re-litigating the
+// specialists itself. Not sent to the athlete; contradiction-notice frames
+// carry the short, athlete-facing version of the same resolution.
+function arbitrationNoteText(resolved: ResolvedContradiction[]): string {
+  const lines = resolved.map(
+    (c) =>
+      `- ${c.domainA} vs ${c.domainB}: ${c.issue} — defer to ${c.chosenDomain} per Rumble's fixed priority (${c.reason})`,
+  );
+  return [
+    `Arbitration note — ${resolved.length} contradiction(s) found between this round's specialists:`,
+    ...lines,
+  ].join('\n');
 }
 
 // --- Main orchestration ---
@@ -261,6 +277,11 @@ export async function pipeStreamWithToolExecution(
       // A specialist's full answer, in their own voice — a card distinct from
       // the orchestrator's own text, not folded into the reasoning trace above.
       // Sent per successful consult_specialist call, in the order they resolved.
+      // Also collected for arbitration below: more than one specialist
+      // consulted in the *same* round is the shape of "Opus couldn't decide
+      // which was authoritative" — not two consults turns apart as
+      // sequential inputs to a plan, which isn't a disagreement to arbitrate.
+      const specialistConsults: Array<{ specialist: Specialist; text: string }> = [];
       for (const tr of toolResults) {
         if (tr.name !== 'consult_specialist' || tr.error) continue;
         const result = tr.result as { specialist?: unknown; response?: unknown } | null;
@@ -268,7 +289,25 @@ export async function pipeStreamWithToolExecution(
         const text = typeof result?.response === 'string' ? result.response : null;
         if (specialist && isSpecialist(specialist) && text) {
           sse(res, { type: 'specialist-message', specialist, text });
+          specialistConsults.push({ specialist, text });
         }
+      }
+
+      // Fails open (see arbitrateSpecialists) — an empty result either means
+      // "nothing contradicted" or "arbitration didn't run", and both mean
+      // "proceed exactly as before this feature existed".
+      let arbitrationNote = '';
+      if (specialistConsults.length > 1) {
+        const resolved = await arbitrateSpecialists(
+          specialistConsults.map((c) => ({ specialist: c.specialist, response: c.text })),
+        );
+        // One line, matching every other sse() call in this file — sse-frame.test.ts
+        // scans for `sse(res, { type: '...'` on a single line to confirm every frame
+        // this file emits is declared in the SseFrame union.
+        for (const c of resolved) {
+          sse(res, { type: 'contradiction-notice', domains: [c.domainA, c.domainB], chosenDomain: c.chosenDomain, oneLineReason: c.reason });
+        }
+        if (resolved.length > 0) arbitrationNote = arbitrationNoteText(resolved);
       }
 
       // assistant turn carrying the tool_use blocks — Claude requires the raw
@@ -276,7 +315,7 @@ export async function pipeStreamWithToolExecution(
       const assistantMsg: ChatMessage = { role: 'assistant', content: decision.content };
 
       const MAX_TOOL_RESULT_CHARS = 8000;
-      const toolResultContent = toolResults.map((tr) => {
+      const toolResultBlocks = toolResults.map((tr) => {
         let text = JSON.stringify(tr.error ? { error: tr.error } : tr.result);
         if (text.length > MAX_TOOL_RESULT_CHARS) text = text.slice(0, MAX_TOOL_RESULT_CHARS) + '... [truncated]';
         return {
@@ -286,6 +325,14 @@ export async function pipeStreamWithToolExecution(
           is_error: Boolean(tr.error),
         };
       });
+      // Rides alongside the real tool_result blocks as a plain text block,
+      // not as a tool_result of its own — Claude requires every tool_result
+      // to match a real tool_use id from this same round, and there's no
+      // tool_use this note is answering. A user-role message can carry extra
+      // content blocks beside its tool_results; this is that.
+      const toolResultContent = arbitrationNote
+        ? [...toolResultBlocks, { type: 'text' as const, text: arbitrationNote }]
+        : toolResultBlocks;
       const toolResultMsg: ChatMessage = { role: 'user', content: toolResultContent };
 
       newMessages.push(assistantMsg, toolResultMsg);

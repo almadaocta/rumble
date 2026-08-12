@@ -10,6 +10,7 @@ import type { Message } from '@anthropic-ai/sdk/resources/messages';
 
 const { chatStreamMock } = vi.hoisted(() => ({ chatStreamMock: vi.fn() }));
 const { executeToolCallsMock } = vi.hoisted(() => ({ executeToolCallsMock: vi.fn() }));
+const { arbitrateSpecialistsMock } = vi.hoisted(() => ({ arbitrateSpecialistsMock: vi.fn() }));
 
 vi.mock('../claude/claude.client.js', () => ({
   chatStream: chatStreamMock,
@@ -18,6 +19,12 @@ vi.mock('../claude/claude.client.js', () => ({
 vi.mock('../tools/tool.executor.js', () => ({
   executeToolCalls: executeToolCallsMock,
   ORCHESTRATOR_TOOLS: [],
+}));
+
+// Defaults to "nothing contradicted" — most of these tests exercise the round
+// loop itself, not arbitration, so only the tests that care override this.
+vi.mock('../tools/arbitrate-specialists.js', () => ({
+  arbitrateSpecialists: arbitrateSpecialistsMock,
 }));
 
 const { pipeStreamWithToolExecution, MAX_TOOL_ROUNDS } = await import('./chat.stream.js');
@@ -62,6 +69,8 @@ const baseCtx = {
 beforeEach(() => {
   chatStreamMock.mockReset();
   executeToolCallsMock.mockReset();
+  arbitrateSpecialistsMock.mockReset();
+  arbitrateSpecialistsMock.mockResolvedValue([]);
 });
 
 describe('pipeStreamWithToolExecution — multi-round tool calls', () => {
@@ -220,5 +229,117 @@ describe('pipeStreamWithToolExecution — multi-round tool calls', () => {
       .map((c) => String(c[0]))
       .join('');
     expect(written).toContain('needed more steps than allowed');
+  });
+});
+
+describe('pipeStreamWithToolExecution — specialist arbitration', () => {
+  function twoSpecialistToolUse(): ReturnType<typeof fakeStream> {
+    return fakeStream({
+      content: [
+        { type: 'tool_use', id: 't1', name: 'consult_specialist', input: { specialist: 'nutritionist', query: 'q' } },
+        { type: 'tool_use', id: 't2', name: 'consult_specialist', input: { specialist: 'strength_conditioning', query: 'q' } },
+      ],
+      stop_reason: 'tool_use',
+    });
+  }
+
+  const TWO_SPECIALIST_RESULTS = [
+    {
+      tool_call_id: 't1',
+      name: 'consult_specialist',
+      result: { ok: true, specialist: 'nutritionist', response: 'Take it after the ride.' },
+    },
+    {
+      tool_call_id: 't2',
+      name: 'consult_specialist',
+      result: { ok: true, specialist: 'strength_conditioning', response: 'Timing does not matter.' },
+    },
+  ];
+
+  it('does not run arbitration when only one specialist was consulted in the round', async () => {
+    chatStreamMock
+      .mockReturnValueOnce(toolDecision('t1', 'consult_specialist', { specialist: 'recovery', query: 'q' }))
+      .mockReturnValueOnce(textDecision('done'));
+    executeToolCallsMock.mockResolvedValueOnce([
+      { tool_call_id: 't1', name: 'consult_specialist', result: { ok: true, specialist: 'recovery', response: 'Rest.' } },
+    ]);
+
+    const res = createMockRes();
+    await pipeStreamWithToolExecution(res, baseCtx);
+
+    expect(arbitrateSpecialistsMock).not.toHaveBeenCalled();
+  });
+
+  it('runs arbitration once when two specialists are consulted in the same round, passing their answers through', async () => {
+    chatStreamMock.mockReturnValueOnce(twoSpecialistToolUse()).mockReturnValueOnce(textDecision('done'));
+    executeToolCallsMock.mockResolvedValueOnce(TWO_SPECIALIST_RESULTS);
+
+    const res = createMockRes();
+    await pipeStreamWithToolExecution(res, baseCtx);
+
+    expect(arbitrateSpecialistsMock).toHaveBeenCalledTimes(1);
+    expect(arbitrateSpecialistsMock).toHaveBeenCalledWith([
+      { specialist: 'nutritionist', response: 'Take it after the ride.' },
+      { specialist: 'strength_conditioning', response: 'Timing does not matter.' },
+    ]);
+  });
+
+  it('emits a contradiction-notice frame and injects an arbitration note into the next round, when arbitration flags one', async () => {
+    arbitrateSpecialistsMock.mockResolvedValueOnce([
+      {
+        domainA: 'strength_conditioning',
+        domainB: 'nutritionist',
+        issue: 'Timing advice conflicts.',
+        chosenDomain: 'nutritionist',
+        reason: 'Post-ride window matters for this athlete.',
+      },
+    ]);
+    chatStreamMock.mockReturnValueOnce(twoSpecialistToolUse()).mockReturnValueOnce(textDecision('done'));
+    executeToolCallsMock.mockResolvedValueOnce(TWO_SPECIALIST_RESULTS);
+
+    const res = createMockRes();
+    await pipeStreamWithToolExecution(res, baseCtx);
+
+    const frames = (res.write as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .map((c) => String(c[0]))
+      .filter((line) => line.includes('contradiction-notice'))
+      .map((line) => JSON.parse(line.slice('data: '.length)));
+    expect(frames).toEqual([
+      {
+        type: 'contradiction-notice',
+        domains: ['strength_conditioning', 'nutritionist'],
+        chosenDomain: 'nutritionist',
+        oneLineReason: 'Post-ride window matters for this athlete.',
+      },
+    ]);
+
+    // Rides as an extra text block alongside the round's real tool_result
+    // blocks in round 2's messages — not a tool_result of its own, since it
+    // doesn't answer any real tool_use id (see chat.stream.ts).
+    const round2Messages = chatStreamMock.mock.calls[1][0].messages;
+    const toolResultMsg = round2Messages.at(-1);
+    expect(toolResultMsg.content).toHaveLength(3);
+    const noteBlock = toolResultMsg.content.at(-1);
+    expect(noteBlock.type).toBe('text');
+    expect(noteBlock.text).toContain('nutritionist');
+    expect(noteBlock.text).toContain('Post-ride window matters');
+  });
+
+  it('injects nothing extra and emits no frame when arbitration runs but finds no contradiction', async () => {
+    arbitrateSpecialistsMock.mockResolvedValueOnce([]);
+    chatStreamMock.mockReturnValueOnce(twoSpecialistToolUse()).mockReturnValueOnce(textDecision('done'));
+    executeToolCallsMock.mockResolvedValueOnce(TWO_SPECIALIST_RESULTS);
+
+    const res = createMockRes();
+    await pipeStreamWithToolExecution(res, baseCtx);
+
+    const written = (res.write as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .map((c) => String(c[0]))
+      .join('');
+    expect(written).not.toContain('contradiction-notice');
+
+    const round2Messages = chatStreamMock.mock.calls[1][0].messages;
+    const toolResultMsg = round2Messages.at(-1);
+    expect(toolResultMsg.content).toHaveLength(2);
   });
 });
