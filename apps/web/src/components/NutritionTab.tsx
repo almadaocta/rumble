@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Flame, ChevronDown } from 'lucide-react';
+import { Flame, ChevronDown, Pencil } from 'lucide-react';
 import { BarStat, SegmentedStats, CardIconHeader } from '@/components/shared';
+import { MealEditSheet } from '@/components/MealEditSheet';
 import { cn } from '@/lib/utils';
 import { getJson } from '@/lib/api';
 import type { Meal, NutritionToday } from '@/lib/api-types';
@@ -29,6 +30,7 @@ function mealMacros(m: Meal): string {
 export function NutritionTab() {
   const [today, setToday] = useState<NutritionToday | null>(null);
   const [showMeals, setShowMeals] = useState(false);
+  const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
 
   const fetchToday = useCallback(async () => {
     // Polls every 60s; a failed poll keeps the last good day rather than
@@ -127,13 +129,23 @@ export function NutritionTab() {
               {showMeals && (
                 <div className="mt-3 flex flex-col">
                   {meals.map(m => (
-                    <div key={m.id} className="py-2.5 border-t border-border first:border-0">
-                      <p className="text-sm font-medium">{m.description}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {m.mealType && <span className="capitalize">{m.mealType} · </span>}
-                        {mealMacros(m)}
-                        {m.estimated && ' · estimated'}
-                      </p>
+                    <div key={m.id} className="py-2.5 border-t border-border first:border-0 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{m.description}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {m.mealType && <span className="capitalize">{m.mealType} · </span>}
+                          {mealMacros(m)}
+                          {m.estimated && ' · estimated'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingMeal(m)}
+                        className="shrink-0 p-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-accent transition-colors"
+                        aria-label={`Edit ${m.description}`}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -144,6 +156,15 @@ export function NutritionTab() {
           )}
         </CardContent>
       </Card>
+
+      {editingMeal && (
+        <MealEditSheet
+          meal={editingMeal}
+          onClose={() => setEditingMeal(null)}
+          onSaved={fetchToday}
+          onDeleted={fetchToday}
+        />
+      )}
     </div>
   );
 }

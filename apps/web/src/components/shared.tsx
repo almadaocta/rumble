@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 const SESSION_ICON_MAP: Record<string, LucideIcon> = {
   endurance: Bike,
@@ -207,6 +208,30 @@ export function IconBadge({
   return (
     <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: color }}>
       <Icon className="w-3.5 h-3.5" style={{ color: iconColor }} />
+    </div>
+  );
+}
+
+/**
+ * A chat-speaker avatar: colored circle + initial letter, at the same 2.5rem
+ * (40px) size assistant-ui's own `.aui-avatar-root` uses for the orchestrator's
+ * avatar — so a specialist's card reads as a distinct speaker at the same
+ * visual weight as the main assistant avatar, not a smaller inline decoration.
+ */
+export function AvatarCircle({
+  initial, color, foreground = 'var(--color-foreground)', className,
+}: {
+  initial: string;
+  color: string;
+  foreground?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn('h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-display font-semibold', className)}
+      style={{ background: color, color: foreground }}
+    >
+      {initial}
     </div>
   );
 }

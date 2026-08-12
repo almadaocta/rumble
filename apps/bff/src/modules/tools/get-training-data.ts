@@ -136,6 +136,10 @@ export async function getTrainingData(
     result.upcomingSessions = upcoming;
     result.activePlan = activePlan[0]
       ? {
+          // update_training_plan's `update`/`add_sessions` actions require this
+          // — it was omitted here, which meant the model had no way to ever
+          // discover the plan it needed to pass back to them.
+          id: activePlan[0].id,
           name: activePlan[0].name,
           phase: activePlan[0].phase,
           methodology: activePlan[0].methodology,

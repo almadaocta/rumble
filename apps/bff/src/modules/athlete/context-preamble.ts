@@ -39,19 +39,27 @@ import { PINNED_NOTE_CATEGORIES } from '../tools/vocabularies.js';
  * as a season's worth of notes accumulates.
  */
 async function fetchSlimAthleteData(athleteId: string) {
-  const [athlete, latestMetrics, todaySessions, activeNotes] = await Promise.all([
-    db.select().from(athletes).where(eq(athletes.id, athleteId)).limit(1),
+  // The athlete row has to resolve first — "today" depends on their
+  // timezone, and querying planSessions before that's known previously
+  // defaulted to the UTC calendar date, which is the wrong day for a chunk
+  // of every 24 hours in any non-UTC timezone.
+  const [athlete] = await db.select().from(athletes).where(eq(athletes.id, athleteId)).limit(1);
+  if (!athlete) return { profile: undefined, latestMetrics: [], todaySessions: [], activeNotes: [] };
+
+  const todayStr = isoDateInTimezone(new Date(), athlete.timezone || 'UTC');
+
+  const [latestMetrics, todaySessions, activeNotes] = await Promise.all([
     db
       .select()
       .from(dailyMetrics)
       .where(eq(dailyMetrics.athleteId, athleteId))
       .orderBy(desc(dailyMetrics.date))
       .limit(1),
-    getSessionsForDate(athleteId, new Date()),
+    getSessionsForDate(athleteId, todayStr),
     getActiveCoachingNotes(athleteId),
   ]);
 
-  return { profile: athlete[0], latestMetrics, todaySessions, activeNotes };
+  return { profile: athlete, latestMetrics, todaySessions, activeNotes };
 }
 
 async function getActiveCoachingNotes(athleteId: string) {
@@ -70,9 +78,25 @@ async function getActiveCoachingNotes(athleteId: string) {
 
 /** The full set, for the detailed context the get_athlete_context tool returns. */
 async function fetchAthleteData(athleteId: string) {
-  const [athlete, recentActivities, latestMetrics, todaySessions, events, weeklyTss, notes] =
+  // Same ordering constraint as fetchSlimAthleteData: "today" needs the
+  // athlete's timezone before planSessions can be queried for it.
+  const [athlete] = await db.select().from(athletes).where(eq(athletes.id, athleteId)).limit(1);
+  if (!athlete) {
+    return {
+      profile: undefined,
+      recentActivities: [],
+      latestMetrics: [],
+      todaySessions: [],
+      events: [],
+      weeklyTss: { current: 0, target: null },
+      notes: [],
+    };
+  }
+
+  const todayStr = isoDateInTimezone(new Date(), athlete.timezone || 'UTC');
+
+  const [recentActivities, latestMetrics, todaySessions, events, weeklyTss, notes] =
     await Promise.all([
-      db.select().from(athletes).where(eq(athletes.id, athleteId)).limit(1),
       db
         .select()
         .from(activities)
@@ -85,7 +109,7 @@ async function fetchAthleteData(athleteId: string) {
         .where(eq(dailyMetrics.athleteId, athleteId))
         .orderBy(desc(dailyMetrics.date))
         .limit(1),
-      getSessionsForDate(athleteId, new Date()),
+      getSessionsForDate(athleteId, todayStr),
       // Future events only, soonest first. Without both, this returns the
       // earliest row on file — a race from last season — which the caller
       // renders as "Next event: X in 200 days". athlete.controller.ts filters
@@ -110,7 +134,7 @@ async function fetchAthleteData(athleteId: string) {
         .limit(15),
     ]);
 
-  return { profile: athlete[0], recentActivities, latestMetrics, todaySessions, events, weeklyTss, notes };
+  return { profile: athlete, recentActivities, latestMetrics, todaySessions, events, weeklyTss, notes };
 }
 
 /**
@@ -132,9 +156,21 @@ export async function buildSlimPreamble(athleteId: string): Promise<string> {
   const tz = data.profile.timezone || 'UTC';
   const lines: string[] = [];
 
+  // ISO date, not just the human-readable line below: every tool that takes a
+  // date (scheduled_date, start_date, ...) wants YYYY-MM-DD, and every one of
+  // those dates the model writes for a session more than a day out is
+  // computed from this anchor. A weekday name alone forces the model to do
+  // that arithmetic in its head across a multi-week plan, which is exactly
+  // where dates drift by a day.
+  //
+  // Deliberately not utcDateString(now) — that's the UTC calendar date, which
+  // near midnight can be a day off from the athlete's own. An athlete at
+  // 11pm local in a timezone ahead of UTC is already "tomorrow" in UTC; this
+  // anchor has to match the calendar the athlete and every session date on
+  // it actually live on.
+  lines.push(`Today: ${isoDateInTimezone(now, tz)} (${now.toLocaleDateString('en-US', { weekday: 'long', timeZone: tz })})`);
   lines.push(`Current time: ${formatInTimezone(now, tz)}`);
   lines.push(`Timezone: ${tz}`);
-  lines.push(`Day: ${now.toLocaleDateString('en-US', { weekday: 'long', timeZone: tz })}`);
 
   lines.push(`Athlete: ${data.profile.name}`);
   if (data.profile.ftp) {
@@ -278,8 +314,12 @@ export async function buildDetailedContext(athleteId: string): Promise<string> {
   return lines.join('\n');
 }
 
-async function getSessionsForDate(athleteId: string, date: Date) {
-  const dateStr = utcDateString(date);
+// Takes the date string directly, not a Date + timezone, so it can never
+// silently fall back to a UTC calendar date — the caller must have already
+// resolved the athlete's actual local day before this runs. Getting this
+// wrong is exactly how a session lands on the model's "today" for the wrong
+// day near a timezone's midnight (see buildSlimPreamble).
+async function getSessionsForDate(athleteId: string, dateStr: string) {
   return db
     .select()
     .from(planSessions)
@@ -325,6 +365,11 @@ async function getWeeklyTss(athleteId: string): Promise<{ current: number; targe
     current: Math.round(Number(result[0]?.total ?? 0)),
     target: activePlan[0]?.weeklyTssTarget ?? null,
   };
+}
+
+/** `en-CA` formats as YYYY-MM-DD natively — the one locale where that's the default, not a manual reassembly. */
+function isoDateInTimezone(date: Date, tz: string): string {
+  return date.toLocaleDateString('en-CA', { timeZone: tz });
 }
 
 function formatInTimezone(date: Date, tz: string): string {

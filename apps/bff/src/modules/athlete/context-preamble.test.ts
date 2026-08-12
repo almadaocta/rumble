@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { migrateTestDb, seedAthlete } from '../../test-utils/test-db.js';
 import { db } from '../../db/client.js';
 import { eq } from 'drizzle-orm';
-import { targetEvents, dailyMetrics, coachingNotes } from '../../db/schema.js';
+import { targetEvents, dailyMetrics, coachingNotes, planSessions, trainingPlans, athletes } from '../../db/schema.js';
 import { buildDetailedContext, buildSlimPreamble } from './context-preamble.js';
 
 // Pinned so "200 days ago" and "in 30 days" mean the same thing on every run.
@@ -176,5 +176,58 @@ describe('buildSlimPreamble coaching notes', () => {
     const preamble = await buildSlimPreamble(athleteId);
     expect(preamble).not.toContain('Antibiotics');
     expect(preamble).not.toContain('nutrition: 1');
+  });
+});
+
+/**
+ * Regression test for a "today" bug: getSessionsForDate queried planSessions
+ * by utcDateString(now) — the UTC calendar date — while the athlete's actual
+ * local day comes from their own timezone (default 'Europe/Madrid', UTC+1/+2).
+ * Late evening in any timezone ahead of UTC, the UTC date has already rolled
+ * to tomorrow, so the preamble reported the wrong day's session as "today"
+ * and hid the real one — which is exactly the kind of confusion that led the
+ * orchestrator to duplicate sessions instead of recognizing what was already
+ * scheduled.
+ */
+describe('buildSlimPreamble "today" resolves in the athlete\'s timezone, not UTC', () => {
+  it('picks the session scheduled on the athlete\'s local date, not the UTC date', async () => {
+    migrateTestDb();
+    // Athlete defaults to Europe/Madrid (UTC+2 in August/CEST).
+    const [athlete] = await db.insert(athletes).values({ name: 'TZ Athlete' }).returning();
+    const athleteId = athlete.id;
+
+    // 22:30 UTC on Aug 10 is 00:30 CEST on Aug 11 in Madrid — local and UTC
+    // disagree about what day it is.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-10T22:30:00Z'));
+
+    const [plan] = await db
+      .insert(trainingPlans)
+      .values({ athleteId, name: 'Test Plan', startDate: '2026-08-01' })
+      .returning();
+
+    await db.insert(planSessions).values([
+      {
+        planId: plan.id,
+        athleteId,
+        scheduledDate: '2026-08-11', // the athlete's actual local today
+        sessionType: 'ride',
+        title: 'Correct local-today session',
+      },
+      {
+        planId: plan.id,
+        athleteId,
+        scheduledDate: '2026-08-10', // the UTC date at this instant — wrong
+        sessionType: 'ride',
+        title: 'Stale UTC-today session',
+      },
+    ]);
+
+    const preamble = await buildSlimPreamble(athleteId);
+    vi.useRealTimers();
+
+    expect(preamble).toContain('Today: 2026-08-11');
+    expect(preamble).toContain('Correct local-today session');
+    expect(preamble).not.toContain('Stale UTC-today session');
   });
 });

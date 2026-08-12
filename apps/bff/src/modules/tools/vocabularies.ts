@@ -36,7 +36,7 @@ export type ConfidenceTier = (typeof CONFIDENCE_TIERS)[number];
 
 // --- update_training_plan ---
 
-export const PLAN_ACTIONS = ['create', 'update', 'add_sessions'] as const;
+export const PLAN_ACTIONS = ['create', 'update', 'add_sessions', 'remove_sessions'] as const;
 
 export const TRAINING_PHASES = ['base', 'build', 'peak', 'race', 'recovery', 'off_season'] as const;
 

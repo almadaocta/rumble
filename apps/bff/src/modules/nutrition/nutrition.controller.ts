@@ -1,12 +1,16 @@
 /**
- * Read API for today's nutrition totals.
+ * HTTP surface for nutrition: reads today's totals, and lets a caller
+ * directly edit or remove an already-logged entry by id.
  *
- * The HTTP half of nutrition; modules/tools owns the log-meal and
- * get-nutrition-log handlers the coach calls. Kept out of the chat module
- * because a nutrition resource behind /api/chat is only discoverable by
- * whoever put it there.
+ * modules/tools still owns log-meal and get-nutrition-log — those are the
+ * coach's chat-driven read/add path. PATCH/DELETE here exist for direct,
+ * non-chat correction (a UI edit control, a manual fix) and go through the
+ * same nutrition_logs rows, scoped to the requesting athlete the same way
+ * the tool handlers are. Kept out of the chat module because a nutrition
+ * resource behind /api/chat is only discoverable by whoever put it there.
  */
 import { Router, type Request, type Response } from 'express';
+import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { nutritionLogs, activities, athletes } from '../../db/schema.js';
 import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
@@ -121,4 +125,62 @@ nutritionController.get('/today', asyncRoute(async (req: Request, res: Response)
       estimated: l.confidenceTier >= 3,
     })),
   });
+}));
+
+const patchNutritionLogSchema = z
+  .object({
+    mealType: z.string().min(1).optional(),
+    description: z.string().min(1).optional(),
+    calories: z.number().nullable().optional(),
+    carbsG: z.number().nullable().optional(),
+    proteinG: z.number().nullable().optional(),
+    fatG: z.number().nullable().optional(),
+    confidenceTier: z.number().int().min(1).max(3).optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })
+  .strict();
+
+nutritionController.patch('/:id', asyncRoute(async (req: Request, res: Response) => {
+  const athleteId = req.athleteId;
+
+  const parsed = patchNutritionLogSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
+  }
+  if (Object.keys(parsed.data).length === 0) {
+    return res.status(400).json({ error: 'No fields to update' });
+  }
+
+  const [updated] = await db
+    .update(nutritionLogs)
+    .set(parsed.data)
+    .where(and(eq(nutritionLogs.id, req.params.id), eq(nutritionLogs.athleteId, athleteId)))
+    .returning();
+
+  if (!updated) return res.status(404).json({ error: 'Nutrition log not found' });
+
+  res.json({
+    id: updated.id,
+    date: updated.date,
+    mealType: updated.mealType,
+    description: updated.description,
+    calories: updated.calories != null ? Number(updated.calories) : null,
+    carbsG: updated.carbsG != null ? Number(updated.carbsG) : null,
+    proteinG: updated.proteinG != null ? Number(updated.proteinG) : null,
+    fatG: updated.fatG != null ? Number(updated.fatG) : null,
+    confidenceTier: updated.confidenceTier,
+  });
+}));
+
+nutritionController.delete('/:id', asyncRoute(async (req: Request, res: Response) => {
+  const athleteId = req.athleteId;
+
+  const deleted = await db
+    .delete(nutritionLogs)
+    .where(and(eq(nutritionLogs.id, req.params.id), eq(nutritionLogs.athleteId, athleteId)))
+    .returning();
+
+  if (deleted.length === 0) return res.status(404).json({ error: 'Nutrition log not found' });
+
+  res.json({ ok: true, id: req.params.id });
 }));

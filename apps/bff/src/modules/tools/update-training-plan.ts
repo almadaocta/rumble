@@ -3,7 +3,7 @@ import { PLAN_ACTIONS, TRAINING_PHASES, SESSION_TYPES } from './vocabularies.js'
 import { PlanIntervals } from '../plans/plan-interval.js';
 import { db } from '../../db/client.js';
 import { trainingPlans, planSessions } from '../../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import type { ToolOutcome } from './tool-result.js';
 import { utcDateString } from '../../lib/format.js';
 
@@ -33,6 +33,7 @@ const UpdatePlanArgs = z.object({
   weekly_hours_target: z.number().optional(),
   notes: z.string().optional(),
   sessions: z.array(SessionInput).optional(),
+  session_ids: z.array(z.string()).optional(),
 });
 
 function truncate(value: string | undefined, max: number): string | undefined {
@@ -183,7 +184,26 @@ export async function updateTrainingPlan(
     return { ok: true, plan_id: params.plan_id };
   }
 
-  // Unreachable: `action` is a zod enum of exactly these three, so a fourth
+  if (params.action === 'remove_sessions') {
+    if (!params.session_ids?.length) {
+      return { ok: false, error: "remove_sessions requires a non-empty 'session_ids' array" };
+    }
+
+    // athleteId-scoped, not plan_id-scoped: the model discovers session ids
+    // from get_training_data's upcomingSessions, which doesn't carry which
+    // plan each row belongs to, so requiring plan_id here would reintroduce
+    // the same "can't find the id it needs" dead end this action exists to
+    // fix. Ownership is still enforced — a session id from another athlete
+    // simply matches zero rows.
+    const deleted = await db
+      .delete(planSessions)
+      .where(and(inArray(planSessions.id, params.session_ids), eq(planSessions.athleteId, athleteId)))
+      .returning({ id: planSessions.id });
+
+    return { ok: true, sessions_removed: deleted.length };
+  }
+
+  // Unreachable: `action` is a zod enum of exactly these four, so a fifth
   // value never survives the parse above. The `never` assignment is what makes
   // that worth writing — adding a case to the enum without a branch for it is a
   // compile error here, where a runtime "Unknown action" string would just be

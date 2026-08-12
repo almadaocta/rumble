@@ -4,6 +4,7 @@ import { nutritionLogs } from '../../db/schema.js';
 import type { ToolFailure } from './tool-result.js';
 import { utcDateString } from '../../lib/format.js';
 import { MEAL_TYPES, CONFIDENCE_TIERS, type ConfidenceTier } from './vocabularies.js';
+import { findDuplicateNutritionLog } from '../nutrition/nutrition.service.js';
 
 /**
  * `.refine` with a type predicate rather than z.union([z.literal(1), ...]):
@@ -71,6 +72,19 @@ export async function logMeal(
   } = LogMealArgs.parse(args);
 
   const today = utcDateString();
+
+  const duplicate = await findDuplicateNutritionLog(athleteId, today, description);
+  if (duplicate) {
+    return {
+      ok: false,
+      error:
+        `A meal with this description is already logged today (id ${duplicate.id}` +
+        `${duplicate.mealType ? `, ${duplicate.mealType}` : ''}): "${duplicate.description}". ` +
+        'If this is meant to change that entry, call update_nutrition_log with that id instead of logging again. ' +
+        'If the athlete really did eat the same thing twice, describe it distinctly (e.g. add a time or portion note) and log again.',
+      existing_id: duplicate.id,
+    };
+  }
 
   const [inserted] = await db
     .insert(nutritionLogs)

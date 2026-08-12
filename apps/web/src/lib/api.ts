@@ -70,3 +70,13 @@ export async function patchJson<T>(path: string, body: unknown): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+/** The DELETE counterpart. Rejects with the BFF's `{ error }` message on any failure. */
+export async function deleteJson<T>(path: string): Promise<T> {
+  const res = await fetch(path, { method: 'DELETE' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error ?? `Request failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}

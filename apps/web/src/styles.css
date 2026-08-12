@@ -26,13 +26,19 @@
   --color-input: #e4e4e0;
   --color-ring: #dc2626;
 
-  /* Restrained two-tone accent pair for card-level personality, not a
-     rainbow-per-card system — used sparingly for tinted card backgrounds,
-     chart bars, and "positive" badges. */
+  /* Restrained accent set for card-level personality, not a rainbow-per-card
+     system — used sparingly: icon badges, chart bars, "positive" tints. Sky
+     and violet extend the original lime/orange pair to give the four chat
+     specialists (cycling/nutrition/recovery/strength) a distinct icon-badge
+     color each; same restraint applies — tint the icon badge, not the card. */
   --color-lime: #84cc16;
   --color-lime-foreground: #223300;
   --color-orange: #ff6116;
   --color-orange-foreground: #f3f3f3;
+  --color-sky: #0ea5e9;
+  --color-sky-foreground: #f3f3f3;
+  --color-violet: #8b5cf6;
+  --color-violet-foreground: #f3f3f3;
 
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
