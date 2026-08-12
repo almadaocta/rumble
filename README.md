@@ -141,11 +141,11 @@ Deleting it removed two modules, a build step, a database table, and a 48-packag
 
 **This stops being true at roughly 3× the current size.** At 40k+ tokens per vertical, cold-cache cost and prefill latency start to matter, and the right answer becomes letting the specialist request sections from a table of contents — not reintroducing embeddings.
 
-### 2. Prompt caching
+### 2. Prompt caching, and the bug that hid in it
 
 The orchestrator's system prompt and all 19 tool schemas are static, so they're marked cache-eligible and sit ahead of the per-turn context. Specialists do the same with persona + library.
 
-Caching is a **prefix match**: one changed byte invalidates everything after it. The fix is ordering — freeze the prefix, and put anything that varies after the last cache breakpoint.
+Caching is a **prefix match**: one changed byte invalidates everything after it. An early version interpolated a live timestamp into the system prompt, which silently defeated caching for the system prompt *and* every tool schema behind it — no error, no warning, just full price on every call. The fix was ordering: freeze the prefix, and put anything that varies after the last cache breakpoint.
 
 The specialist prefixes are sorted deterministically for the same reason — `readdir` order isn't guaranteed, and a library that concatenates differently between restarts would never cache.
 
@@ -161,7 +161,7 @@ A brand new chat thread has no message history of its own, but the coaching rela
 
 The model writes structured coaching notes (`save_coaching_note`) as facts come up in conversation — categorized (`health`, `constraint`, `preference`, `decision`, `nutrition`, `schedule`, `observation`, `general`), no separate summarization pass needed since the note is a byproduct of the same tool call. Every turn's preamble includes the safety/identity-critical categories in full — the ones that should shape a response regardless of what the conversation is about — and archives the rest behind a per-category count plus `get_coaching_notes({ category })`, so per-turn cost stays roughly flat instead of growing with a season's worth of decisions and observations. When a note revises rather than extends a prior one (a corrected pacing plan superseding the one it replaces), `supersedes_note_id` retires the old note instead of both accumulating in the archive indefinitely.
 
-The user's own message is persisted the instant the request is received, too — not batched with the (possibly multi-round, multi-tool-call) reply. A page refresh mid-generation shows what was actually sent instead of reverting to the chat's state before that turn.
+(Separately, same "don't lose state you already have" instinct: the user's own message is persisted the instant the request is received, not batched with the possibly multi-round reply — a page refresh mid-generation shows what was actually sent, not the chat's state before that turn.)
 
 ### 5. Typed context per specialist, not a free-form blob
 
@@ -179,7 +179,7 @@ The fix doesn't ask specialists to negotiate with each other — that's a fake p
 
 Nutritionist and strength_conditioning are equal priority — a real tie, not a rounding error in the tier numbers. The first recorded eval fixture caught what that meant in practice: `higherPrioritySpecialist()` originally defaulted a tie to whichever domain the classifier named first, and the classifier's own `reason` text argued for the *other* domain — a fake winner with an incongruent justification. It now returns `null` on a genuine tie: no contradiction-notice card is shown (there's no winner to put on it), and the orchestrator is told to weigh the tradeoff itself, with the full conversation context arbitration never sees.
 
-The resolution rides into the orchestrator's next round as an extra context block, not a fake `tool_result` (Claude requires every one of those to match a real `tool_use` id from that round), and `orchestrator.md` tells the model to defer to a flagged contradiction and cite it rather than re-litigate the specialists itself. The athlete sees a short, separate notice — which domains disagreed and which one the app went with — never the full priority reasoning. Fails open at every step: a contradiction the classifier can't parse, or an API error, just means the orchestrator synthesizes exactly as it always did.
+The resolution rides into the orchestrator's next round as context, and `orchestrator.md` tells the model to defer to a flagged contradiction and cite it rather than re-litigate the specialists itself. The athlete sees a short, separate notice — which domains disagreed and which one the app went with — never the full priority reasoning. Fails open throughout: a parse failure or API error just means the orchestrator synthesizes as it always did.
 
 ---
 
