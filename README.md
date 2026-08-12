@@ -4,15 +4,34 @@
 
 ## Why I built this
 
-I'm a cyclist. The data already exists (power, heart rate, nutrition, training load) but nothing reasons across all of it at once. Talking to Claude about training is useful only if you paste in the numbers yourself. Memory features help with continuity, but they summarize into prose. They don't preserve that your FTP is 285w, that your TSB is -22, or that you've done four Zone 2 rides in a row. Precision gets lost exactly where it matters most.
+I'm a cyclist. The data already exists, but nothing reasons across all of it at once.
 
-The obvious fix is tools: give Claude access to your training data and let it query what it needs. That works, but it hits a ceiling fast. A single model with four coaching domains stuffed into one prompt sounds like a committee and grounds itself in whatever's nearest in context. Token cost compounds as conversation history grows. And general-purpose tool use has no opinion on which questions warrant real domain expertise versus a quick lookup.
+**The data:**
+- Power, heart rate, and pace from every ride
+- Training load and fitness trend over the season
+- Nutrition, logged meal by meal
+- Coaching history — goals, constraints, decisions made along the way
 
-Rumble's answer is a two-layer architecture: one orchestrator that owns the conversation and routes decisions, and four isolated domain specialists (cycling, nutrition, recovery, strength) each with their own narrow system prompt and their own cited knowledge base. Specialists are consulted only when their domain is actually needed, on a model that costs a fifth as much. The token budget is managed explicitly: static inputs are prompt-cached, conversation history is trimmed and stubbed rather than replayed in full, and tool results are projected to exclude anything the model doesn't need.
+**What a generalist LLM already does well:**
+- Explains training concepts clearly
+- Reasons well over whatever numbers you paste into the chat
+- Holds a conversation, with some memory of what was said before
 
-The result is a coach that answers "Am I ready to race in three weeks?" with your actual TSB trend and training history, not a generic periodization lecture.
+**What it doesn't:**
+- Query your actual data — you're transcribing numbers by hand, every time
+- Preserve precision across a season — memory features summarize into prose, and prose drops exact numbers
+- Know when a question needs real domain expertise (sports-nutrition literature, overtraining research) instead of a quick lookup
+- Stay grounded once several coaching domains are stacked into one prompt — cycling, nutrition, recovery, and strength advice from a single voice reads like a committee, not a coach
 
-**Who this is for:** a cyclist training against a real goal event who wants a research-grounded second opinion — without paying for a coach or trusting a chatbot with no citations behind it. It's not a replacement for TrainingPeaks-style planning or an actual coaching relationship; it's what you ask at 11pm when you're deciding whether to ride tired, grounded in your real TSB and cited sports-science instead of a generic answer. Running it needs an Anthropic API key and either a Wahoo connection or logging rides by hand — no ML background required, and it runs chat-only without Wahoo at all.
+**What Rumble does instead:**
+- Gives the model tools to query training history, fitness metrics, and nutrition logs directly — nothing transcribed by hand
+- Splits domain judgment into isolated specialists (cycling, nutrition, recovery, strength), each grounded in its own cited knowledge base, consulted only when the question actually needs it
+- Writes durable notes as facts come up in conversation, so a new chat thread still remembers an injury, a pacing plan, a diet change — no lossy summarization pass
+- Manages token cost explicitly, so a growing history and specialist consults don't make the coach slower or pricier over time
+
+The result: a coach that answers with your actual numbers and history, not a generic periodization lecture.
+
+**Who this is for:** a cyclist training against a real goal event who wants a research-grounded second opinion — without paying for a coach or trusting a chatbot with no citations behind it. It's not a replacement for TrainingPeaks-style planning or an actual coaching relationship; it's what you ask at 11pm when you're deciding whether to ride tired, grounded in your real training data and cited sports-science instead of a generic answer. Running it needs an Anthropic API key and either a Wahoo connection or logging rides by hand — no ML background required, and it runs chat-only without Wahoo at all.
 
 ---
 
