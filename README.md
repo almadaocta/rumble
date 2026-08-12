@@ -12,6 +12,8 @@ Rumble's answer is a two-layer architecture: one orchestrator that owns the conv
 
 The result is a coach that answers "Am I ready to race in three weeks?" with your actual TSB trend and training history, not a generic periodization lecture.
 
+**Who this is for:** a cyclist training against a real goal event who wants a research-grounded second opinion — without paying for a coach or trusting a chatbot with no citations behind it. It's not a replacement for TrainingPeaks-style planning or an actual coaching relationship; it's what you ask at 11pm when you're deciding whether to ride tired, grounded in your real TSB and cited sports-science instead of a generic answer. Running it needs an Anthropic API key and either a Wahoo connection or logging rides by hand — no ML background required, and it runs chat-only without Wahoo at all.
+
 ---
 
 ## Demo
@@ -25,7 +27,7 @@ Coach chat runs alongside every tab (right pane above) — one conversation, not
 
 ---
 
-## Why this is interesting
+## How it works
 
 The chat UI isn't the hard part. The orchestration is.
 
@@ -101,7 +103,7 @@ sequenceDiagram
 
 ---
 
-## Decisions worth defending
+## Design decisions
 
 ### 1. No vector database
 
@@ -200,16 +202,16 @@ The raw per-second streams (3,600–18,000+ numbers for a 1–5 hr ride) are nev
 
 ## The knowledge base
 
-29 markdown documents across four verticals, each grounded in named, checkable sources — consensus statements, position stands, and meta-analyses rather than coaching blogs.
+29 markdown documents across four verticals, each grounded in named, checkable sources — consensus statements, position stands, and meta-analyses rather than coaching blogs. Full citations live in each document's own `## Sources` block; browse them in [`rumble-knowledge-base/`](rumble-knowledge-base/), one folder per specialist.
 
-| Specialist | Docs | Prefix | Representative sources |
-| --- | :-: | :-: | --- |
-| **Cycling coach** | 9 | ~14.0k tok | Coggan power zones · Seiler polarized training · Poole critical power · Buchheit & Laursen HIIT · Bosquet tapering meta-analysis |
-| **Nutritionist** | 8 | ~12.1k tok | Burke & Jeukendrup carbohydrate guidelines · ISSN position stands · IOC 2023 REDs consensus |
-| **Recovery** | 6 | ~10.0k tok | ECSS/ACSM overtraining consensus · Walsh 2021 sleep consensus · Dupuy recovery-modality meta-analysis |
-| **Strength & conditioning** | 6 | ~9.1k tok | Rønnestad & Mujika · Wilson concurrent-training meta-analysis · Olmedillas cycling bone health |
+| Specialist | Docs | Prefix |
+| --- | :-: | :-: |
+| **Cycling coach** | 9 | ~14.0k tok |
+| **Nutritionist** | 8 | ~12.1k tok |
+| **Recovery** | 6 | ~10.0k tok |
+| **Strength & conditioning** | 6 | ~9.1k tok |
 
-Each document ends with a `## Sources` block containing full citations. Adding one is: drop a `.md` file in the right folder, restart.
+Adding a document is: drop a `.md` file in the right folder, restart.
 
 ---
 
@@ -270,7 +272,7 @@ Tests run against a fresh in-memory SQLite database, migrated from `apps/bff/dri
 
 ## Known gaps
 
-Being honest about the edges, because a portfolio piece that claims to be finished isn't believable:
+In daily use, not fully built — here's what's still open:
 
 - **Per-athlete document upload** (training plans, lab results via Claude's Files API) is designed but not built.
 - **Test coverage is deliberately scoped** to pure logic and the highest-risk backend paths — auth and data scoping, the multi-round tool loop. React components and the Wahoo sync flow aren't covered.
