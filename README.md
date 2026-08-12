@@ -25,7 +25,13 @@ I'm a cyclist. We measure everything — power, heart rate, sleep, weight, nutri
 
 The result: a coach that answers with your actual numbers and history, not a generic periodization lecture.
 
-**Who this is for:** a cyclist training against a real goal event who wants a research-grounded second opinion — without paying for a coach or trusting a chatbot with no citations behind it. It's not a replacement for TrainingPeaks-style planning or an actual coaching relationship; it's what you ask at 11pm when you're deciding whether to ride tired, grounded in your real training data and cited sports-science instead of a generic answer. Running it needs an Anthropic API key and either a Wahoo connection or logging rides by hand — no ML background required, and it runs chat-only without Wahoo at all.
+**Who this is for:** a cyclist training against a real goal event who wants answers grounded in their own numbers and in checkable sports-science — not what you already have:
+
+- **Not plain Claude/ChatGPT.** A general chat has no access to your training data — you're pasting your numbers in by hand, every time, and it forgets them by the next conversation. Ask it about tapering and it'll sound just as confident whether it's right or not; there's no source behind the answer.
+- **Not TrainingPeaks/WKO5.** Those chart your data; they don't reason over it. No chart answers "should I ride tired today," and neither cites a source for the training advice underneath its numbers.
+- **Not a coach's monthly fee.** A real coach isn't available at 11pm when you're deciding whether to skip tomorrow's intervals, and costs real money either way. Rumble is bring-your-own Anthropic API key — you pay for the tokens an actual conversation uses, not a subscription, and the architecture (see "Token budget" below) is built specifically to keep that number small.
+
+Running it needs an Anthropic API key and either a Wahoo connection or logging rides by hand — no ML background required, and it runs chat-only without Wahoo at all.
 
 ---
 
