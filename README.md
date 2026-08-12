@@ -4,13 +4,7 @@
 
 ## Why I built this
 
-I'm a cyclist. The data already exists, but nothing reasons across all of it at once.
-
-**The data:**
-- Power, heart rate, and pace from every ride
-- Training load and fitness trend over the season
-- Nutrition, logged meal by meal
-- Coaching history — goals, constraints, decisions made along the way
+I'm a cyclist. We measure everything — power, heart rate, sleep, weight, nutrition, training load, coaching history. The data exists. It just doesn't reason across all of it at once.
 
 **What a generalist LLM already does well:**
 - Explains training concepts clearly
